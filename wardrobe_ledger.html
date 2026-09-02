@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Wardrobe Ledger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+<style>
+  :root{
+    --paper:#F7F6F2; --panel:#FFFFFF; --ink:#17181A; --mut:#6B6C70;
+    --line:#E4E1DA; --lineSoft:#EFEDE7; --accent:#4A3B4D;
+    --star:#3F6B54; --improve:#9A6B2F; --sell:#9B4A3F;
+    --starBg:#EAF0EC; --improveBg:#F3ECDF; --sellBg:#F2E6E3;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+  button{font-family:var(--sans);cursor:pointer}
+  input{font-family:var(--sans)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+const C = {}; // colors via CSS vars in inline styles below
+const serif = 'var(--serif)';
+const sans = 'var(--sans)';
+
+const BENCH = {
+  "Tops":                 { range:"$2",      mid:2,   ceil:80  },
+  "Bottoms":              { range:"$1–5",    mid:3,   ceil:100 },
+  "Sweaters & Knitwear":  { range:"$3–6",    mid:4.5, ceil:80  },
+  "Coats":                { range:"$1–5",    mid:3,   ceil:150 },
+  "Jackets":              { range:"$2–6",    mid:4,   ceil:150 },
+  "Dresses":              { range:"$3–10",   mid:6.5, ceil:40  },
+  "Shoes":                { range:"$1–4",    mid:3.5, ceil:150 },
+  "Workwear":             { range:"$5–15",   mid:10,  ceil:120 },
+  "Special Occasionwear": { range:"$10–20",  mid:15,  ceil:15  },
+  "Accessories":          { range:"$2–8 est.", mid:5, ceil:100 },
+};
+// outfit-building order for the Get dressed view
+const CAT_ORDER = ["Tops","Sweaters & Knitwear","Dresses","Bottoms","Coats","Jackets","Shoes","Accessories","Workwear","Special Occasionwear"];
+
+const EMBEDDED = [
+  [0,"Burberry Trench","Coats",275,125,75],[1,"Wardrobe NYC sweater","Sweaters & Knitwear",110,0,2],
+  [2,"Silk & Cashmere triangle scarf","Accessories",130,0,20],[3,"Junior Galliano Jacket","Special Occasionwear",250,0,4],
+  [4,"No.6 Store Pony Shoes","Shoes",400,0,5],[5,"Frankie Shop Coat","Coats",400,0,25],
+  [6,"Turkey Coat","Coats",400,0,5],[7,"Muji black sweater","Sweaters & Knitwear",40,0,20],
+  [8,"Muji v-neck sweater vest","Sweaters & Knitwear",20,0,10],[9,"Silk & Cashmere grey vest","Sweaters & Knitwear",300,0,15],
+  [10,"SWDN sweater (Cueva)","Sweaters & Knitwear",185,0,1],[11,"Sundae School chinos","Workwear",120,0,1],
+  [12,"Uniqlo culottes","Bottoms",20,0,5],[13,"GU jeans","Bottoms",20,0,3],
+  [14,"Asket culottes","Bottoms",100,0,20],[15,"Asket striped dress","Dresses",100,0,5],
+  [16,"Asket vest with ribbons","Tops",80,0,5],[17,"Snow Peak jacket","Jackets",150,0,100],
+  [18,"Snow Peak skirt","Bottoms",80,0,14],[19,"Issey Miyake sweater (blue/black)","Sweaters & Knitwear",80,0,3],
+  [20,"Issey Miyake sweater (silver)","Sweaters & Knitwear",100,0,2],[21,"Haruta Spock shoes","Shoes",40,0,1],
+  [22,"Japan dress pants","Workwear",100,0,1],[23,"Japan beret","Accessories",70,0,2],
+  [24,"French hat","Accessories",80,0,1],[25,"Pink dress (UK)","Dresses",110,0,4],
+  [26,"Simone Rocha Crocs clogs","Shoes",200,0,50],[27,"Simone Rocha Crocs heels","Shoes",300,0,4],
+  [28,"Boyfriend shirt (double collar)","Tops",100,0,4],[29,"Boyfriend shirt (tie around)","Tops",100,0,0],
+  [30,"Boyfriend shirt pants (wide)","Bottoms",150,0,10],[31,"Boyfriend shirt pants (tapered)","Bottoms",150,0,2],
+  [32,"& Other Stories white shirt","Workwear",70,0,0],[33,"Replica slip dress","Dresses",200,0,10],
+  [34,"IF Soho blazer","Workwear",200,0,2],[35,"Yohji Yamamoto dress (IF Soho)","Special Occasionwear",950,0,1],
+  [36,"Y's dress (Japan)","Dresses",80,0,2],[37,"Uniqlo x JW Anderson (heavy blue)","Sweaters & Knitwear",70,0,10],
+  [38,"Uniqlo x JW Anderson (heavy beige)","Sweaters & Knitwear",70,0,5],[39,"Uniqlo x JW Anderson (light stripes)","Tops",40,0,10],
+  [40,"Rag & Bone pink dress shirt","Workwear",80,0,8],[41,"Cecilie Bahnsen black party dress","Special Occasionwear",600,200,8],
+  [42,"Not Conventional culottes (Kyoto)","Bottoms",150,0,0],[43,"Not Conventional pleated shirt (Kyoto)","Tops",150,0,0],
+  [44,"Valentino dress (Rome)","Special Occasionwear",100,100,4],[45,"Rome vintage dress","Dresses",80,0,4],
+];
+
+// ---- storage that works inside Claude (window.storage) and outside (localStorage) ----
+const store = {
+  async get(k){
+    try{ if(window.storage){ const r=await window.storage.get(k); return r&&r.value?r.value:null; } }catch(e){}
+    try{ return localStorage.getItem(k); }catch(e){ return null; }
+  },
+  async set(k,v){
+    try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
+    try{ localStorage.setItem(k,v); }catch(e){}
+  }
+};
+
+const money = (n)=> n==null? "—" : "$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
+const r2 = (n)=> Math.round(n*100)/100;
+
+function classify(it){
+  const b = BENCH[it.category] || {range:"—",mid:5,ceil:80};
+  const total = it.price + it.care;
+  const cpw = it.wears>0 ? total/it.wears : Infinity;
+  const targetWears = Math.ceil(total/b.mid);
+  const gap = Math.max(0, targetWears - it.wears);
+  const reachable = targetWears <= b.ceil;
+  let status = (it.wears>0 && cpw<=b.mid) ? "star" : (reachable ? "improve" : "sell");
+  return { ...it, total, cpw, targetWears, gap, reachable, status, mid:b.mid, range:b.range, ceil:b.ceil };
+}
+
+const SM = {
+  star:{label:"On target",color:"var(--star)",bg:"var(--starBg)"},
+  improve:{label:"Wear more",color:"var(--improve)",bg:"var(--improveBg)"},
+  sell:{label:"Reconsider",color:"var(--sell)",bg:"var(--sellBg)"},
+};
+function Pill({status}){ const m=SM[status]; return <span style={{fontSize:11,fontWeight:600,color:m.color,background:m.bg,padding:"3px 9px",borderRadius:999,whiteSpace:"nowrap"}}>{m.label}</span>; }
+function Cpw({value,size=28}){ return <span style={{fontFamily:serif,fontSize:size,letterSpacing:"-0.02em",lineHeight:1}}>{value===Infinity?"∞":money(r2(value))}</span>; }
+
+function App(){
+  const [tab,setTab]=useState("reduce");
+  const [rows,setRows]=useState(EMBEDDED.map(r=>({id:r[0],item:r[1],category:r[2],price:r[3],care:r[4],wears:r[5]})));
+  const [extra,setExtra]=useState({});          // local-mode wear logs
+  const [url,setUrl]=useState("");              // sheet web-app url
+  const [conn,setConn]=useState("local");       // local | connecting | connected | error
+  const [showConn,setShowConn]=useState(false);
+  const [urlDraft,setUrlDraft]=useState("");
+  const pollRef=useRef(null);
+
+  // load saved url + local extras
+  useEffect(()=>{(async()=>{
+    const savedUrl=await store.get("wl_url"); const savedExtra=await store.get("wl_extra");
+    if(savedExtra){ try{ setExtra(JSON.parse(savedExtra)); }catch(e){} }
+    if(savedUrl){ setUrl(savedUrl); setUrlDraft(savedUrl); connect(savedUrl,true); }
+  })();},[]);
+  useEffect(()=>{ store.set("wl_extra",JSON.stringify(extra)); },[extra]);
+
+  async function fetchRows(u){
+    const res=await fetch(u,{method:"GET"});
+    const data=await res.json();
+    if(!data||!data.rows) throw new Error("bad");
+    return data.rows.map(x=>({id:Number(x.id),item:x.item,category:x.category,price:Number(x.price)||0,care:Number(x.care)||0,wears:Number(x.wears)||0}));
+  }
+  async function connect(u,silent){
+    setConn("connecting");
+    try{
+      const fresh=await fetchRows(u);
+      setRows(fresh); setUrl(u); setConn("connected");
+      store.set("wl_url",u);
+      if(pollRef.current) clearInterval(pollRef.current);
+      pollRef.current=setInterval(async()=>{ try{ setRows(await fetchRows(u)); }catch(e){} }, 8000);
+    }catch(e){ setConn("error"); }
+  }
+  function disconnect(){
+    if(pollRef.current) clearInterval(pollRef.current);
+    setUrl(""); setConn("local"); store.set("wl_url","");
+    setRows(EMBEDDED.map(r=>({id:r[0],item:r[1],category:r[2],price:r[3],care:r[4],wears:r[5]})));
+  }
+
+  async function logWear(id, delta=1){
+    if(conn==="connected"){
+      setRows(rs=>rs.map(r=>r.id===id?{...r,wears:Math.max(0,r.wears+delta)}:r)); // optimistic
+      try{
+        const res=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"wear",id,delta})});
+        const data=await res.json();
+        if(data&&data.rows){ setRows(data.rows.map(x=>({id:Number(x.id),item:x.item,category:x.category,price:Number(x.price)||0,care:Number(x.care)||0,wears:Number(x.wears)||0}))); }
+      }catch(e){ setConn("error"); }
+    } else {
+      setExtra(e=>({...e,[id]:Math.max(0,(e[id]||0)+delta)}));
+    }
+  }
+  function resetLocal(){ setExtra({}); }
+
+  // effective items
+  const items = useMemo(()=> rows.map(r=>{
+    const wears = conn==="connected" ? r.wears : r.wears + (extra[r.id]||0);
+    return classify({...r,wears});
+  }), [rows,extra,conn]);
+
+  const stats = useMemo(()=>{
+    const spend=items.reduce((s,i)=>s+i.total,0);
+    const worn=items.filter(i=>i.wears>0);
+    const avg=worn.length?worn.reduce((s,i)=>s+i.cpw,0)/worn.length:0;
+    const never=items.filter(i=>i.wears===0).length;
+    return {spend,avg,never,count:items.length};
+  },[items]);
+
+  const connMeta = {
+    local:{t:"Local mode",c:"var(--mut)"}, connecting:{t:"Connecting…",c:"var(--improve)"},
+    connected:{t:"Synced to sheet",c:"var(--star)"}, error:{t:"Sheet unreachable",c:"var(--sell)"},
+  }[conn];
+
+  return (
+    <div style={{maxWidth:1080,margin:"0 auto",padding:"28px 22px 72px"}}>
+      {/* header */}
+      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:16,borderBottom:"1px solid var(--line)",paddingBottom:20}}>
+        <div>
+          <div style={{fontFamily:serif,fontSize:34,letterSpacing:"-0.02em"}}>The Wardrobe Ledger</div>
+          <div style={{color:"var(--mut)",fontSize:14,marginTop:4}}>
+            {stats.count} pieces · {money(stats.spend)} in · {money(r2(stats.avg))} avg cost per wear · {stats.never} never worn
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          <button onClick={()=>setShowConn(s=>!s)} style={{...ghost,borderColor:"var(--line)"}}>
+            <span style={{width:7,height:7,borderRadius:99,background:connMeta.c,display:"inline-block",marginRight:8}}/>{connMeta.t}
+          </button>
+          {conn==="local" && extra && Object.keys(extra).length>0 &&
+            <button onClick={resetLocal} style={{...ghost,fontSize:12}}>Reset logged wears</button>}
+        </div>
+      </div>
+
+      {showConn && <ConnPanel {...{urlDraft,setUrlDraft,connect,disconnect,conn}} />}
+
+      {/* tabs */}
+      <div style={{display:"flex",gap:4,marginTop:22,flexWrap:"wrap"}}>
+        {[["reduce","Reduce cost per wear"],["trade","Trade up to goals"],["sell","Sell or keep"],["today","Get dressed"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{...tabBtn,...(tab===k?tabActive:{})}}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{marginTop:26}}>
+        {tab==="reduce" && <Reduce items={items} logWear={logWear} connected={conn==="connected"}/>}
+        {tab==="trade"  && <Trade items={items} logWear={logWear}/>}
+        {tab==="sell"   && <Sell items={items}/>}
+        {tab==="today"  && <Today items={items} logWear={logWear}/>}
+      </div>
+    </div>
+  );
+}
+
+function ConnPanel({urlDraft,setUrlDraft,connect,disconnect,conn}){
+  return (
+    <div style={{...panelBox,padding:20,marginTop:16}}>
+      <div style={{fontFamily:serif,fontSize:18}}>Connect your Google Sheet</div>
+      <p style={{fontSize:13.5,color:"var(--mut)",lineHeight:1.6,maxWidth:760,marginTop:8}}>
+        Deploy the Apps Script bound to your <b>Wardrobe Ledger</b> sheet as a web app, then paste its URL here.
+        The sheet becomes the source of truth: logging a wear writes to it, and edits you make in the sheet appear here within a few seconds.
+        Sync needs network access the in-Claude preview may block — if it won't connect, download this file and open it in your own browser, where it works fully. Until connected, the app runs on its built-in copy.
+      </p>
+      <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+        <input value={urlDraft} onChange={e=>setUrlDraft(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec"
+          style={{flex:"1 1 420px",minWidth:0,padding:"10px 12px",border:"1px solid var(--line)",borderRadius:9,fontSize:13.5}}/>
+        <button onClick={()=>connect(urlDraft)} style={solid}>Connect</button>
+        {conn==="connected" && <button onClick={disconnect} style={ghost}>Disconnect</button>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- REDUCE ----------
+function Reduce({items,logWear,connected}){
+  const winners=[...items].filter(i=>i.status==="star").sort((a,b)=>b.wears-a.wears);
+  const under=[...items].filter(i=>i.status==="improve").sort((a,b)=>b.gap-a.gap);
+  return (
+    <div>
+      <Lead>Underused pieces on the left carry the highest cost per wear but can still reach their category benchmark. Each shows how many more wears closes the gap. Your proven pieces sit on the right, already earning their keep.</Lead>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:22,marginTop:22}}>
+        <Panel title="Underused — worth pushing" count={under.length}>
+          {under.map(i=>(
+            <div key={i.id} style={rowS}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={rowTitle}>{i.item}</div>
+                <div style={rowMeta}>{i.category} · benchmark {i.range}</div>
+                <div style={{fontSize:12.5,color:"var(--accent)",marginTop:6}}>{i.gap} more wear{i.gap===1?"":"s"} → {money(r2(i.total/i.targetWears))}/wear</div>
+              </div>
+              <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+                <Cpw value={i.cpw} size={25}/>
+                <button onClick={()=>logWear(i.id)} style={mini}>+ Wore it</button>
+              </div>
+            </div>
+          ))}
+        </Panel>
+        <Panel title="Proven — already at target" count={winners.length}>
+          {winners.map(i=>(
+            <div key={i.id} style={rowS}>
+              <div style={{flex:1,minWidth:0}}><div style={rowTitle}>{i.item}</div><div style={rowMeta}>{i.category} · {i.wears} wears</div></div>
+              <div style={{textAlign:"right"}}><Cpw value={i.cpw} size={25}/><div style={{marginTop:6}}><Pill status="star"/></div></div>
+            </div>
+          ))}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// ---------- TRADE UP (dynamic, per category) ----------
+function Trade({items,logWear}){
+  const byCat={};
+  items.forEach(i=>{ (byCat[i.category]=byCat[i.category]||[]).push(i); });
+
+  const blocks=[];
+  CAT_ORDER.concat(Object.keys(byCat)).forEach(cat=>{
+    if(!byCat[cat] || blocks.find(b=>b.cat===cat)) return;
+    const list=byCat[cat];
+    const staples=[...list].filter(i=>i.wears>0).sort((a,b)=>b.wears-a.wears).slice(0,2);
+    const candidates=[...list].filter(i=>i.cpw>i.mid && !staples.includes(i)).sort((a,b)=>b.cpw-a.cpw);
+    if(staples.length && candidates.length) blocks.push({cat,staples,candidates});
+  });
+
+  return (
+    <div>
+      <Lead>Grouped by category. The pieces you reach for most prove where heavy rotation happens — so that's where wearing an underused piece instead pays off fastest. Each suggestion shows where its cost per wear lands as you rotate it in.</Lead>
+      <div style={{marginTop:22,display:"flex",flexDirection:"column",gap:26}}>
+        {blocks.map(b=>(
+          <div key={b.cat} style={{...panelBox,padding:22}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",flexWrap:"wrap",gap:8}}>
+              <div style={{fontFamily:serif,fontSize:22,letterSpacing:"-0.01em"}}>{b.cat}</div>
+              <div style={{fontSize:13,color:"var(--mut)"}}>
+                You reach for <b style={{color:"var(--ink)"}}>{b.staples.map(s=>s.item).join(", ")}</b>
+              </div>
+            </div>
+            <div style={{fontSize:13,color:"var(--mut)",marginTop:4}}>Instead, consider rotating in:</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:12,marginTop:14}}>
+              {b.candidates.map(c=>{
+                const target=b.staples[0].wears; // wear it like your top staple
+                const proj = c.total/(c.wears+Math.max(1,target-c.wears));
+                return (
+                  <div key={c.id} style={{background:"var(--paper)",border:"1px solid var(--lineSoft)",borderRadius:10,padding:14}}>
+                    <div style={{fontSize:14.5,fontWeight:500,lineHeight:1.25}}>{c.item}</div>
+                    <div style={rowMeta}>{money(c.total)} · {c.wears} wear{c.wears===1?"":"s"}</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:10}}>
+                      <Cpw value={c.cpw} size={22}/>
+                      <span style={{fontSize:12,color:"var(--mut)"}}>now</span>
+                    </div>
+                    <div style={{fontSize:12.5,color:"var(--star)",marginTop:6}}>
+                      → {money(r2(proj))}/wear at {Math.max(c.wears+1,target)} wears
+                    </div>
+                    <button onClick={()=>logWear(c.id)} style={{...mini,marginTop:10}}>+ Wore it today</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------- SELL ----------
+function Sell({items}){
+  const sell=[...items].filter(i=>i.status==="sell").sort((a,b)=>b.cpw-a.cpw);
+  return (
+    <div>
+      <Lead>These can't reach their benchmark within a realistic lifetime of wears — the maths won't bend. Keep the ones you genuinely love as sentimental exceptions; let the rest go and recover some cost through resale.</Lead>
+      <div style={{...panelBox,marginTop:22,overflow:"hidden"}}>
+        {sell.map((i,idx)=>(
+          <div key={i.id} style={{...rowS,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={rowTitle}>{i.item}</div>
+              <div style={rowMeta}>{i.category} · {money(i.total)} · {i.wears} wear{i.wears===1?"":"s"} · needs ~{i.targetWears} wears, ceiling {i.ceil}</div>
+            </div>
+            <div style={{textAlign:"right"}}><Cpw value={i.cpw} size={25}/><div style={{marginTop:6}}><Pill status="sell"/></div></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------- TODAY (grouped by category) ----------
+function Today({items,logWear}){
+  const byCat={};
+  items.forEach(i=>{ (byCat[i.category]=byCat[i.category]||[]).push(i); });
+  const cats=CAT_ORDER.filter(c=>byCat[c]);
+  return (
+    <div>
+      <Lead>Your least-worn pieces, grouped by category so you can build a whole look from the corners of your closet. Pick a top, a bottom, a shoe. Logging a wear drops its cost per wear on the spot.</Lead>
+      <div style={{marginTop:22,display:"flex",flexDirection:"column",gap:22}}>
+        {cats.map(cat=>{
+          const list=[...byCat[cat]].sort((a,b)=>a.wears-b.wears).slice(0,5);
+          return (
+            <div key={cat}>
+              <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10}}>
+                <div style={{fontFamily:serif,fontSize:19}}>{cat}</div>
+                <div style={{flex:1,height:1,background:"var(--line)"}}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:12}}>
+                {list.map(i=>(
+                  <div key={i.id} style={{...panelBox,padding:14,display:"flex",flexDirection:"column",justifyContent:"space-between",minHeight:132}}>
+                    <div>
+                      <div style={{fontFamily:serif,fontSize:16,lineHeight:1.22}}>{i.item}</div>
+                      <div style={rowMeta}>{i.wears} wear{i.wears===1?"":"s"}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:10}}>
+                      <Cpw value={i.cpw} size={20}/>
+                      <button onClick={()=>logWear(i.id)} style={mini}>+ Wear</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---- shared ----
+function Lead({children}){ return <p style={{fontSize:15,color:"var(--mut)",lineHeight:1.6,maxWidth:720,margin:0}}>{children}</p>; }
+function Panel({title,count,children}){
+  return (
+    <div style={panelBox}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid var(--lineSoft)"}}>
+        <div style={{fontFamily:serif,fontSize:17}}>{title}</div><div style={{fontSize:12.5,color:"var(--mut)"}}>{count}</div>
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+const panelBox={background:"var(--panel)",border:"1px solid var(--line)",borderRadius:14};
+const rowS={display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,padding:"14px 18px"};
+const rowTitle={fontSize:15,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis"};
+const rowMeta={fontSize:12.5,color:"var(--mut)",marginTop:3};
+const tabBtn={fontSize:13.5,fontWeight:500,color:"var(--mut)",background:"transparent",border:"none",padding:"9px 14px",borderRadius:10};
+const tabActive={color:"var(--ink)",background:"var(--panel)",border:"1px solid var(--line)"};
+const solid={fontSize:13,fontWeight:600,color:"var(--paper)",background:"var(--accent)",border:"none",padding:"10px 16px",borderRadius:10};
+const ghost={display:"inline-flex",alignItems:"center",fontSize:12.5,fontWeight:500,color:"var(--mut)",background:"transparent",border:"1px solid var(--line)",padding:"7px 12px",borderRadius:9};
+const mini={fontSize:12,fontWeight:600,color:"var(--accent)",background:"var(--paper)",border:"1px solid var(--line)",padding:"6px 11px",borderRadius:8};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
