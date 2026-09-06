@@ -202,7 +202,7 @@ function App(){
 
       {/* tabs */}
       <div style={{display:"flex",gap:4,marginTop:22,flexWrap:"wrap"}}>
-        {[["reduce","Reduce cost per wear"],["trade","Trade up to goals"],["sell","Sell or keep"],["today","Get dressed"]].map(([k,l])=>(
+        {[["reduce","Reduce cost per wear"],["trade","Higher CPW switch"],["sell","Sell or keep"],["today","Get dressed"],["all","Full wardrobe"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{...tabBtn,...(tab===k?tabActive:{})}}>{l}</button>
         ))}
       </div>
@@ -212,6 +212,7 @@ function App(){
         {tab==="trade"  && <Trade items={items} logWear={logWear}/>}
         {tab==="sell"   && <Sell items={items}/>}
         {tab==="today"  && <Today items={items} logWear={logWear}/>}
+        {tab==="all"    && <AllItems items={items} logWear={logWear}/>}
       </div>
     </div>
   );
@@ -381,6 +382,53 @@ function Today({items,logWear}){
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- FULL WARDROBE (spreadsheet order) ----------
+function AllItems({items,logWear}){
+  const list=[...items].sort((a,b)=>a.id-b.id);
+  const th={textAlign:"left",fontSize:11.5,fontWeight:600,color:"var(--mut)",letterSpacing:"0.02em",padding:"10px 12px",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"};
+  const td={fontSize:13.5,padding:"11px 12px",borderBottom:"1px solid var(--lineSoft)",whiteSpace:"nowrap"};
+  const num={...td,textAlign:"right",fontVariantNumeric:"tabular-nums"};
+  return (
+    <div>
+      <Lead>Every piece in the same order as your sheet. Total is price plus special care; cost per wear updates as you log wears here or in the sheet.</Lead>
+      <div style={{...panelBox,marginTop:22,overflowX:"auto"}}>
+        <table style={{borderCollapse:"collapse",width:"100%",minWidth:640}}>
+          <thead>
+            <tr>
+              <th style={{...th,textAlign:"right"}}>#</th>
+              <th style={th}>Item</th>
+              <th style={th}>Category</th>
+              <th style={{...th,textAlign:"right"}}>Total</th>
+              <th style={{...th,textAlign:"right"}}>Wears</th>
+              <th style={{...th,textAlign:"right"}}>Cost / wear</th>
+              <th style={th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(i=>(
+              <tr key={i.id}>
+                <td style={{...num,color:"var(--mut)"}}>{i.id}</td>
+                <td style={{...td,fontWeight:500,whiteSpace:"normal"}}>{i.item}</td>
+                <td style={{...td,color:"var(--mut)"}}>{i.category}</td>
+                <td style={num}>{money(i.total)}</td>
+                <td style={num}>{i.wears}</td>
+                <td style={{...num,fontFamily:serif,fontSize:15}}>{i.cpw===Infinity?"∞":money(r2(i.cpw))}</td>
+                <td style={{...td,textAlign:"right"}}>
+                  <div style={{display:"inline-flex",gap:6}}>
+                    <button onClick={()=>logWear(i.id,-1)} disabled={i.wears<=0}
+                      style={{...mini,opacity:i.wears<=0?0.4:1,cursor:i.wears<=0?"default":"pointer"}}>− Wear</button>
+                    <button onClick={()=>logWear(i.id)} style={mini}>+ Wear</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
