@@ -2,459 +2,593 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The Wardrobe Ledger</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Mena's Closet" />
+<meta name="theme-color" content="#FFFFFF" />
+<title>Mena's Closet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
 <style>
   :root{
-    --paper:#F7F6F2; --panel:#FFFFFF; --ink:#17181A; --mut:#6B6C70;
-    --line:#E4E1DA; --lineSoft:#EFEDE7; --accent:#4A3B4D;
-    --star:#3F6B54; --improve:#9A6B2F; --sell:#9B4A3F;
-    --starBg:#EAF0EC; --improveBg:#F3ECDF; --sellBg:#F2E6E3;
-    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --bg:#FFFFFF; --soft:#FAFAF9; --ink:#111111; --mut:#6E6E6E; --faint:#9B9B9B;
+    --line:#E6E4E1; --lineSoft:#F0EEEB; --flag:#8C2F1F; --good:#2F5D45;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --display:"Cormorant Garamond",Georgia,serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans)}
-  button{font-family:var(--sans);cursor:pointer}
-  input{font-family:var(--sans)}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-weight:400;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit}
+  input,select,textarea{font-family:var(--sans);color:var(--ink)}
+  a{color:inherit}
+  ::selection{background:#111;color:#fff}
+  .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .hoverlift{transition:opacity .18s ease}
+  .hoverlift:hover{opacity:.62}
+  @media (prefers-reduced-motion: reduce){ .hoverlift{transition:none} }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect, useRef } = React;
+const sans='var(--sans)', display='var(--display)';
 
-const C = {}; // colors via CSS vars in inline styles below
-const serif = 'var(--serif)';
-const sans = 'var(--sans)';
-
+/* ---------------- benchmarks ---------------- */
 const BENCH = {
-  "Tops":                 { range:"$2",      mid:2,   ceil:80  },
-  "Bottoms":              { range:"$1–5",    mid:3,   ceil:100 },
-  "Sweaters & Knitwear":  { range:"$3–6",    mid:4.5, ceil:80  },
-  "Coats":                { range:"$1–5",    mid:3,   ceil:150 },
-  "Jackets":              { range:"$2–6",    mid:4,   ceil:150 },
-  "Dresses":              { range:"$3–10",   mid:6.5, ceil:40  },
-  "Shoes":                { range:"$1–4",    mid:3.5, ceil:150 },
-  "Workwear":             { range:"$5–15",   mid:10,  ceil:120 },
-  "Special Occasionwear": { range:"$10–20",  mid:15,  ceil:15  },
-  "Accessories":          { range:"$2–8 est.", mid:5, ceil:100 },
+  "Tops":{range:"$2",mid:2,ceil:80},
+  "Bottoms":{range:"$1–5",mid:3,ceil:100},
+  "Sweaters & Knitwear":{range:"$3–6",mid:4.5,ceil:80},
+  "Coats":{range:"$1–5",mid:3,ceil:150},
+  "Jackets":{range:"$2–6",mid:4,ceil:150},
+  "Dresses":{range:"$3–10",mid:6.5,ceil:40},
+  "Shoes":{range:"$1–4",mid:3.5,ceil:150},
+  "Workwear":{range:"$5–15",mid:10,ceil:120},
+  "Special Occasionwear":{range:"$10–20",mid:15,ceil:15},
+  "Accessories":{range:"$2–8",mid:5,ceil:100},
 };
-// outfit-building order for the Get dressed view
-const CAT_ORDER = ["Tops","Sweaters & Knitwear","Dresses","Bottoms","Coats","Jackets","Shoes","Accessories","Workwear","Special Occasionwear"];
+const CATS = ["Tops","Sweaters & Knitwear","Dresses","Bottoms","Coats","Jackets","Shoes","Accessories","Workwear","Special Occasionwear"];
+const SEASONS = ["All year","Spring","Summer","Fall","Winter"];
 
-const EMBEDDED = [
-  [0,"Burberry Trench","Coats",275,125,75],[1,"Wardrobe NYC sweater","Sweaters & Knitwear",110,0,2],
-  [2,"Silk & Cashmere triangle scarf","Accessories",130,0,20],[3,"Junior Galliano Jacket","Special Occasionwear",250,0,4],
-  [4,"No.6 Store Pony Shoes","Shoes",400,0,5],[5,"Frankie Shop Coat","Coats",400,0,25],
-  [6,"Turkey Coat","Coats",400,0,5],[7,"Muji black sweater","Sweaters & Knitwear",40,0,20],
-  [8,"Muji v-neck sweater vest","Sweaters & Knitwear",20,0,10],[9,"Silk & Cashmere grey vest","Sweaters & Knitwear",300,0,15],
-  [10,"SWDN sweater (Cueva)","Sweaters & Knitwear",185,0,1],[11,"Sundae School chinos","Workwear",120,0,1],
-  [12,"Uniqlo culottes","Bottoms",20,0,5],[13,"GU jeans","Bottoms",20,0,3],
-  [14,"Asket culottes","Bottoms",100,0,20],[15,"Asket striped dress","Dresses",100,0,5],
-  [16,"Asket vest with ribbons","Tops",80,0,5],[17,"Snow Peak jacket","Jackets",150,0,100],
-  [18,"Snow Peak skirt","Bottoms",80,0,14],[19,"Issey Miyake sweater (blue/black)","Sweaters & Knitwear",80,0,3],
-  [20,"Issey Miyake sweater (silver)","Sweaters & Knitwear",100,0,2],[21,"Haruta Spock shoes","Shoes",40,0,1],
-  [22,"Japan dress pants","Workwear",100,0,1],[23,"Japan beret","Accessories",70,0,2],
-  [24,"French hat","Accessories",80,0,1],[25,"Pink dress (UK)","Dresses",110,0,4],
-  [26,"Simone Rocha Crocs clogs","Shoes",200,0,50],[27,"Simone Rocha Crocs heels","Shoes",300,0,4],
-  [28,"Boyfriend shirt (double collar)","Tops",100,0,4],[29,"Boyfriend shirt (tie around)","Tops",100,0,0],
-  [30,"Boyfriend shirt pants (wide)","Bottoms",150,0,10],[31,"Boyfriend shirt pants (tapered)","Bottoms",150,0,2],
-  [32,"& Other Stories white shirt","Workwear",70,0,0],[33,"Replica slip dress","Dresses",200,0,10],
-  [34,"IF Soho blazer","Workwear",200,0,2],[35,"Yohji Yamamoto dress (IF Soho)","Special Occasionwear",950,0,1],
-  [36,"Y's dress (Japan)","Dresses",80,0,2],[37,"Uniqlo x JW Anderson (heavy blue)","Sweaters & Knitwear",70,0,10],
-  [38,"Uniqlo x JW Anderson (heavy beige)","Sweaters & Knitwear",70,0,5],[39,"Uniqlo x JW Anderson (light stripes)","Tops",40,0,10],
-  [40,"Rag & Bone pink dress shirt","Workwear",80,0,8],[41,"Cecilie Bahnsen black party dress","Special Occasionwear",600,200,8],
-  [42,"Not Conventional culottes (Kyoto)","Bottoms",150,0,0],[43,"Not Conventional pleated shirt (Kyoto)","Tops",150,0,0],
-  [44,"Valentino dress (Rome)","Special Occasionwear",100,100,4],[45,"Rome vintage dress","Dresses",80,0,4],
-];
+/* ---------------- seed data ---------------- */
+const SEED = [
+  ["Burberry","Trench","Coats",275,125,75,"Fall"],
+  ["Wardrobe NYC","Sweater","Sweaters & Knitwear",110,0,2,"Winter"],
+  ["Silk & Cashmere","Triangle scarf","Accessories",130,0,20,"Winter"],
+  ["Junior Galliano","Jacket","Special Occasionwear",250,0,4,"All year"],
+  ["No.6 Store","Pony shoes","Shoes",400,0,5,"Fall"],
+  ["Frankie Shop","Coat","Coats",400,0,25,"Winter"],
+  ["","Turkey coat","Coats",400,0,5,"Winter"],
+  ["Muji","Black sweater","Sweaters & Knitwear",40,0,20,"Winter"],
+  ["Muji","V-neck sweater vest","Sweaters & Knitwear",20,0,10,"Fall"],
+  ["Silk & Cashmere","Grey vest","Sweaters & Knitwear",300,0,15,"Fall"],
+  ["SWDN","Sweater (Cueva)","Sweaters & Knitwear",185,0,1,"Winter"],
+  ["Sundae School","Chinos","Workwear",120,0,1,"All year"],
+  ["Uniqlo","Culottes","Bottoms",20,0,5,"Summer"],
+  ["GU","Jeans","Bottoms",20,0,3,"All year"],
+  ["Asket","Culottes","Bottoms",100,0,20,"All year"],
+  ["Asket","Striped dress","Dresses",100,0,5,"Summer"],
+  ["Asket","Vest with ribbons","Tops",80,0,5,"All year"],
+  ["Snow Peak","Jacket","Jackets",150,0,100,"All year"],
+  ["Snow Peak","Skirt","Bottoms",80,0,14,"All year"],
+  ["Issey Miyake","Sweater, blue/black","Sweaters & Knitwear",80,0,3,"Winter"],
+  ["Issey Miyake","Sweater, silver","Sweaters & Knitwear",100,0,2,"Winter"],
+  ["Haruta","Spock shoes","Shoes",40,0,1,"All year"],
+  ["","Japan dress pants","Workwear",100,0,1,"All year"],
+  ["","Japan beret","Accessories",70,0,2,"Fall"],
+  ["","French hat","Accessories",80,0,1,"All year"],
+  ["","Pink dress, UK","Dresses",110,0,4,"Summer"],
+  ["Simone Rocha","Crocs clogs","Shoes",200,0,50,"All year"],
+  ["Simone Rocha","Crocs heels","Shoes",300,0,4,"All year"],
+  ["","Boyfriend shirt, double collar","Tops",100,0,4,"All year"],
+  ["","Boyfriend shirt, tie around","Tops",100,0,0,"All year"],
+  ["","Boyfriend shirt pants, wide","Bottoms",150,0,10,"All year"],
+  ["","Boyfriend shirt pants, tapered","Bottoms",150,0,2,"All year"],
+  ["& Other Stories","White shirt","Workwear",70,0,0,"All year"],
+  ["Maison Margiela","Replica slip dress","Dresses",200,0,10,"Summer"],
+  ["IF Soho","Blazer","Workwear",200,0,2,"All year"],
+  ["Yohji Yamamoto","Dress, IF Soho","Special Occasionwear",950,0,1,"All year"],
+  ["Y's","Dress, Japan","Dresses",80,0,2,"All year"],
+  ["Uniqlo x JW Anderson","Heavy knit, blue","Sweaters & Knitwear",70,0,10,"Winter"],
+  ["Uniqlo x JW Anderson","Heavy knit, beige","Sweaters & Knitwear",70,0,5,"Winter"],
+  ["Uniqlo x JW Anderson","Light knit, stripes","Tops",40,0,10,"Spring"],
+  ["Rag & Bone","Pink dress shirt","Workwear",80,0,8,"All year"],
+  ["Cecilie Bahnsen","Black party dress","Special Occasionwear",600,200,8,"All year"],
+  ["Not Conventional","Culottes, Kyoto","Bottoms",150,0,0,"All year"],
+  ["Not Conventional","Pleated shirt, Kyoto","Tops",150,0,0,"All year"],
+  ["Valentino","Dress, Rome","Special Occasionwear",100,100,4,"All year"],
+  ["","Rome vintage dress","Dresses",80,0,4,"Summer"],
+].map((r,i)=>({
+  id:i, brand:r[0], name:r[1], category:r[2], price:r[3], care:r[4],
+  baseWears:r[5], season:r[6], resale:0, cleanCost:0, img:"", history:[]
+}));
 
-// ---- storage that works inside Claude (window.storage) and outside (localStorage) ----
-const store = {
-  async get(k){
-    try{ if(window.storage){ const r=await window.storage.get(k); return r&&r.value?r.value:null; } }catch(e){}
-    try{ return localStorage.getItem(k); }catch(e){ return null; }
-  },
-  async set(k,v){
-    try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
-    try{ localStorage.setItem(k,v); }catch(e){}
-  }
+/* ---------------- persistence ---------------- */
+const KEY="menas_closet_v3";
+const store={
+  async get(k){ try{ if(window.storage){const r=await window.storage.get(k); return r&&r.value?r.value:null;} }catch(e){}
+    try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  async set(k,v){ try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
+    try{ localStorage.setItem(k,v); }catch(e){} }
 };
+function idbOpen(){return new Promise((res,rej)=>{let q;try{q=indexedDB.open("closet_media",1);}catch(e){return rej(e);}
+  q.onupgradeneeded=()=>{const d=q.result; if(!d.objectStoreNames.contains("outfits"))d.createObjectStore("outfits",{keyPath:"id",autoIncrement:true});};
+  q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});}
+async function idbAll(n){const db=await idbOpen();return new Promise((res,rej)=>{const o=[];const c=db.transaction(n).objectStore(n).openCursor();
+  c.onsuccess=e=>{const k=e.target.result; if(k){o.push(k.value);k.continue();}else res(o);}; c.onerror=()=>rej(c.error);});}
+async function idbPut(n,v){const db=await idbOpen();return new Promise((res,rej)=>{const r=db.transaction(n,"readwrite").objectStore(n).put(v);
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+async function idbDel(n,k){const db=await idbOpen();return new Promise((res,rej)=>{const r=db.transaction(n,"readwrite").objectStore(n).delete(k);
+  r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);});}
+function fileToThumb(file,max,q){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);
+  img.onload=()=>{const s=Math.min(1,max/Math.max(img.width,img.height));const w=Math.round(img.width*s),h=Math.round(img.height*s);
+    const cv=document.createElement("canvas");cv.width=w;cv.height=h;cv.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(u);
+    try{res(cv.toDataURL("image/jpeg",q||0.82));}catch(e){rej(e);} };
+  img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("img"));}; img.src=u;});}
 
-const money = (n)=> n==null? "—" : "$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
-const r2 = (n)=> Math.round(n*100)/100;
-
-function classify(it){
-  const b = BENCH[it.category] || {range:"—",mid:5,ceil:80};
-  const total = it.price + it.care;
-  const cpw = it.wears>0 ? total/it.wears : Infinity;
-  const targetWears = Math.ceil(total/b.mid);
-  const gap = Math.max(0, targetWears - it.wears);
-  const reachable = targetWears <= b.ceil;
-  let status = (it.wears>0 && cpw<=b.mid) ? "star" : (reachable ? "improve" : "sell");
-  return { ...it, total, cpw, targetWears, gap, reachable, status, mid:b.mid, range:b.range, ceil:b.ceil };
+/* ---------------- helpers ---------------- */
+const money=n=>n==null?"—":"$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
+const r2=n=>Math.round(n*100)/100;
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const daysBetween=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+function seasonNow(){const m=new Date().getMonth();return m<2||m===11?"Winter":m<5?"Spring":m<8?"Summer":"Fall";}
+function dormancy(it){ if(!it.history.length) return null; const last=it.history[it.history.length-1]; return daysBetween(last,todayISO()); }
+function lastWornLabel(it){
+  const d=dormancy(it);
+  if(d===null) return it.baseWears>0?"No date logged":"Never worn";
+  if(d<=0) return "Worn today"; if(d===1) return "Worn yesterday";
+  if(d<30) return `${d} days ago`;
+  const mo=Math.round(d/30); return mo<12?`${mo} mo ago`:`${Math.round(d/365)} yr ago`;
+}
+function derive(it){
+  const b=BENCH[it.category]||{range:"—",mid:5,ceil:80};
+  const wears=(it.baseWears||0)+it.history.length;
+  const total=(+it.price||0)+(+it.care||0);
+  const cpw=wears>0?total/wears:Infinity;
+  const targetWears=Math.ceil(total/b.mid);
+  const gap=Math.max(0,targetWears-wears);
+  const reachable=targetWears<=b.ceil;
+  const status=(wears>0&&cpw<=b.mid)?"star":(reachable?"improve":"sell");
+  return {...it,wears,total,cpw,targetWears,gap,reachable,status,mid:b.mid,range:b.range,ceil:b.ceil,dormant:dormancy(it)};
 }
 
-const SM = {
-  star:{label:"On target",color:"var(--star)",bg:"var(--starBg)"},
-  improve:{label:"Wear more",color:"var(--improve)",bg:"var(--improveBg)"},
-  sell:{label:"Reconsider",color:"var(--sell)",bg:"var(--sellBg)"},
-};
-function Pill({status}){ const m=SM[status]; return <span style={{fontSize:11,fontWeight:600,color:m.color,background:m.bg,padding:"3px 9px",borderRadius:999,whiteSpace:"nowrap"}}>{m.label}</span>; }
-function Cpw({value,size=28}){ return <span style={{fontFamily:serif,fontSize:size,letterSpacing:"-0.02em",lineHeight:1}}>{value===Infinity?"∞":money(r2(value))}</span>; }
+/* ---------------- primitives ---------------- */
+function Money({v,size=15,weight=500}){return <span style={{fontSize:size,fontWeight:weight,letterSpacing:"-0.01em"}}>{v===Infinity?"—":money(r2(v))}</span>;}
+function Tag({children,tone}){
+  const c=tone==="flag"?"var(--flag)":tone==="good"?"var(--good)":"var(--mut)";
+  return <span style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:c,border:`1px solid ${c==="var(--mut)"?"var(--line)":c}`,padding:"3px 7px",whiteSpace:"nowrap"}}>{children}</span>;
+}
+function Thumb({src,ratio="1 / 1",label}){
+  return src
+    ? <img src={src} alt="" style={{width:"100%",aspectRatio:ratio,objectFit:"cover",display:"block",background:"var(--soft)"}}/>
+    : <div style={{width:"100%",aspectRatio:ratio,background:"var(--soft)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontFamily:display,fontSize:26,color:"#D8D5D0"}}>{label||"—"}</span></div>;
+}
+function Lead({children}){return <p style={{fontSize:14,color:"var(--mut)",lineHeight:1.7,maxWidth:"64ch",margin:"0 0 26px"}}>{children}</p>;}
+function SectionRule({children,right}){
+  return <div style={{display:"flex",alignItems:"center",gap:14,margin:"0 0 16px"}}>
+    <div className="lbl" style={{whiteSpace:"nowrap"}}>{children}</div>
+    <div style={{flex:1,height:1,background:"var(--line)"}}/>
+    {right&&<div className="lbl" style={{whiteSpace:"nowrap"}}>{right}</div>}
+  </div>;
+}
+function Empty({children}){return <div style={{border:"1px solid var(--line)",padding:"46px 20px",textAlign:"center",color:"var(--mut)",fontSize:13.5}}>{children}</div>;}
 
+/* ---------------- app ---------------- */
 function App(){
-  const [tab,setTab]=useState("reduce");
-  const [rows,setRows]=useState(EMBEDDED.map(r=>({id:r[0],item:r[1],category:r[2],price:r[3],care:r[4],wears:r[5]})));
-  const [extra,setExtra]=useState({});          // local-mode wear logs
-  const [url,setUrl]=useState("");              // sheet web-app url
-  const [conn,setConn]=useState("local");       // local | connecting | connected | error
-  const [showConn,setShowConn]=useState(false);
-  const [urlDraft,setUrlDraft]=useState("");
-  const pollRef=useRef(null);
+  const [tab,setTab]=useState("closet");
+  const [raw,setRaw]=useState(null);
+  const [outfits,setOutfits]=useState([]);
+  const [editing,setEditing]=useState(null);
+  const [toast,setToast]=useState("");
 
-  // load saved url + local extras
   useEffect(()=>{(async()=>{
-    const savedUrl=await store.get("wl_url"); const savedExtra=await store.get("wl_extra");
-    if(savedExtra){ try{ setExtra(JSON.parse(savedExtra)); }catch(e){} }
-    if(savedUrl){ setUrl(savedUrl); setUrlDraft(savedUrl); connect(savedUrl,true); }
+    const s=await store.get(KEY);
+    if(s){ try{ setRaw(JSON.parse(s)); }catch(e){ setRaw(SEED); } } else setRaw(SEED);
+    try{ setOutfits((await idbAll("outfits")).sort((a,b)=>b.ts-a.ts)); }catch(e){}
   })();},[]);
-  useEffect(()=>{ store.set("wl_extra",JSON.stringify(extra)); },[extra]);
+  useEffect(()=>{ if(raw) store.set(KEY,JSON.stringify(raw)); },[raw]);
 
-  async function fetchRows(u){
-    const res=await fetch(u,{method:"GET"});
-    const data=await res.json();
-    if(!data||!data.rows) throw new Error("bad");
-    return data.rows.map(x=>({id:Number(x.id),item:x.item,category:x.category,price:Number(x.price)||0,care:Number(x.care)||0,wears:Number(x.wears)||0}));
+  function flash(m){ setToast(m); setTimeout(()=>setToast(""),1800); }
+  const items=useMemo(()=>raw?raw.map(derive):[],[raw]);
+
+  function logWear(id,delta=1){
+    setRaw(rs=>rs.map(r=>{
+      if(r.id!==id) return r;
+      if(delta>0) return {...r,history:[...r.history,todayISO()]};
+      if(r.history.length) return {...r,history:r.history.slice(0,-1)};
+      return {...r,baseWears:Math.max(0,(r.baseWears||0)-1)};
+    }));
   }
-  async function connect(u,silent){
-    setConn("connecting");
-    try{
-      const fresh=await fetchRows(u);
-      setRows(fresh); setUrl(u); setConn("connected");
-      store.set("wl_url",u);
-      if(pollRef.current) clearInterval(pollRef.current);
-      pollRef.current=setInterval(async()=>{ try{ setRows(await fetchRows(u)); }catch(e){} }, 8000);
-    }catch(e){ setConn("error"); }
+  function logClean(id){
+    setRaw(rs=>rs.map(r=>r.id===id?{...r,care:(+r.care||0)+(+r.cleanCost||0)}:r));
+    flash("Cleaning cost added");
   }
-  function disconnect(){
-    if(pollRef.current) clearInterval(pollRef.current);
-    setUrl(""); setConn("local"); store.set("wl_url","");
-    setRows(EMBEDDED.map(r=>({id:r[0],item:r[1],category:r[2],price:r[3],care:r[4],wears:r[5]})));
+  function saveItem(v){
+    setRaw(rs=>{
+      if(v.id==null){ const id=rs.reduce((m,r)=>Math.max(m,r.id),-1)+1;
+        return [...rs,{...v,id,history:[],baseWears:+v.baseWears||0}]; }
+      return rs.map(r=>r.id===v.id?{...r,...v}:r);
+    });
+    setEditing(null); flash(v.id==null?"Piece added":"Piece updated");
+  }
+  function deleteItem(id){ setRaw(rs=>rs.filter(r=>r.id!==id)); setEditing(null); flash("Piece removed"); }
+
+  async function addOutfit(f){ try{ const src=await fileToThumb(f,1100,.82); const rec={src,ts:Date.now()};
+    const id=await idbPut("outfits",rec); setOutfits(o=>[{...rec,id},...o]); }catch(e){} }
+  async function delOutfit(id){ try{ await idbDel("outfits",id); setOutfits(o=>o.filter(x=>x.id!==id)); }catch(e){} }
+
+  function exportJSON(){
+    const blob=new Blob([JSON.stringify(raw,null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=`menas-closet-${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+  function importJSON(file){
+    const fr=new FileReader();
+    fr.onload=()=>{ try{ const d=JSON.parse(fr.result);
+      if(Array.isArray(d)){ setRaw(d.map(x=>({history:[],baseWears:0,resale:0,cleanCost:0,img:"",season:"All year",...x}))); flash("Closet restored"); } }
+      catch(e){ flash("Could not read that file"); } };
+    fr.readAsText(file);
   }
 
-  async function logWear(id, delta=1){
-    if(conn==="connected"){
-      setRows(rs=>rs.map(r=>r.id===id?{...r,wears:Math.max(0,r.wears+delta)}:r)); // optimistic
-      try{
-        const res=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"wear",id,delta})});
-        const data=await res.json();
-        if(data&&data.rows){ setRows(data.rows.map(x=>({id:Number(x.id),item:x.item,category:x.category,price:Number(x.price)||0,care:Number(x.care)||0,wears:Number(x.wears)||0}))); }
-      }catch(e){ setConn("error"); }
-    } else {
-      setExtra(e=>({...e,[id]:Math.max(0,(e[id]||0)+delta)}));
-    }
-  }
-  function resetLocal(){ setExtra({}); }
-
-  // effective items
-  const items = useMemo(()=> rows.map(r=>{
-    const wears = conn==="connected" ? r.wears : r.wears + (extra[r.id]||0);
-    return classify({...r,wears});
-  }), [rows,extra,conn]);
-
-  const stats = useMemo(()=>{
+  const stats=useMemo(()=>{
     const spend=items.reduce((s,i)=>s+i.total,0);
     const worn=items.filter(i=>i.wears>0);
     const avg=worn.length?worn.reduce((s,i)=>s+i.cpw,0)/worn.length:0;
-    const never=items.filter(i=>i.wears===0).length;
-    return {spend,avg,never,count:items.length};
+    return {spend,avg,never:items.filter(i=>i.wears===0).length,count:items.length};
   },[items]);
 
-  const connMeta = {
-    local:{t:"Local mode",c:"var(--mut)"}, connecting:{t:"Connecting…",c:"var(--improve)"},
-    connected:{t:"Synced to sheet",c:"var(--star)"}, error:{t:"Sheet unreachable",c:"var(--sell)"},
-  }[conn];
+  if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
+
+  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["sell","Sell or keep"],["lookbook","Lookbook"]];
 
   return (
-    <div style={{maxWidth:1080,margin:"0 auto",padding:"28px 22px 72px"}}>
-      {/* header */}
-      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:16,borderBottom:"1px solid var(--line)",paddingBottom:20}}>
-        <div>
-          <div style={{fontFamily:serif,fontSize:34,letterSpacing:"-0.02em"}}>The Wardrobe Ledger</div>
-          <div style={{color:"var(--mut)",fontSize:14,marginTop:4}}>
-            {stats.count} pieces · {money(stats.spend)} in · {money(r2(stats.avg))} avg cost per wear · {stats.never} never worn
-          </div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-          <button onClick={()=>setShowConn(s=>!s)} style={{...ghost,borderColor:"var(--line)"}}>
-            <span style={{width:7,height:7,borderRadius:99,background:connMeta.c,display:"inline-block",marginRight:8}}/>{connMeta.t}
-          </button>
-          {conn==="local" && extra && Object.keys(extra).length>0 &&
-            <button onClick={resetLocal} style={{...ghost,fontSize:12}}>Reset logged wears</button>}
+    <div>
+      {/* masthead */}
+      <div style={{borderBottom:"1px solid var(--line)",textAlign:"center",padding:"26px 20px 0"}}>
+        <div style={{fontFamily:display,fontSize:34,fontWeight:400,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
+        <div className="lbl" style={{marginTop:9}}>Cost per wear &middot; {stats.count} pieces</div>
+        <div style={{display:"flex",justifyContent:"center",gap:0,flexWrap:"wrap",marginTop:20}}>
+          {TABS.map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} className="hoverlift" style={{
+              fontSize:11.5,letterSpacing:".13em",textTransform:"uppercase",padding:"12px 15px",
+              color:tab===k?"var(--ink)":"var(--mut)",borderBottom:tab===k?"1.5px solid var(--ink)":"1.5px solid transparent",marginBottom:-1}}>{l}</button>
+          ))}
+          <button onClick={()=>setEditing({})} className="hoverlift" style={{fontSize:11.5,letterSpacing:".13em",textTransform:"uppercase",padding:"12px 15px",color:"var(--mut)"}}>+ Add</button>
         </div>
       </div>
 
-      {showConn && <ConnPanel {...{urlDraft,setUrlDraft,connect,disconnect,conn}} />}
-
-      {/* tabs */}
-      <div style={{display:"flex",gap:4,marginTop:22,flexWrap:"wrap"}}>
-        {[["reduce","Reduce cost per wear"],["trade","Higher CPW switch"],["sell","Sell or keep"],["today","Get dressed"],["all","Full wardrobe"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{...tabBtn,...(tab===k?tabActive:{})}}>{l}</button>
-        ))}
-      </div>
-
-      <div style={{marginTop:26}}>
-        {tab==="reduce" && <Reduce items={items} logWear={logWear} connected={conn==="connected"}/>}
-        {tab==="trade"  && <Trade items={items} logWear={logWear}/>}
-        {tab==="sell"   && <Sell items={items}/>}
-        {tab==="today"  && <Today items={items} logWear={logWear}/>}
-        {tab==="all"    && <AllItems items={items} logWear={logWear}/>}
-      </div>
-    </div>
-  );
-}
-
-function ConnPanel({urlDraft,setUrlDraft,connect,disconnect,conn}){
-  return (
-    <div style={{...panelBox,padding:20,marginTop:16}}>
-      <div style={{fontFamily:serif,fontSize:18}}>Connect your Google Sheet</div>
-      <p style={{fontSize:13.5,color:"var(--mut)",lineHeight:1.6,maxWidth:760,marginTop:8}}>
-        Deploy the Apps Script bound to your <b>Wardrobe Ledger</b> sheet as a web app, then paste its URL here.
-        The sheet becomes the source of truth: logging a wear writes to it, and edits you make in the sheet appear here within a few seconds.
-        Sync needs network access the in-Claude preview may block — if it won't connect, download this file and open it in your own browser, where it works fully. Until connected, the app runs on its built-in copy.
-      </p>
-      <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-        <input value={urlDraft} onChange={e=>setUrlDraft(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec"
-          style={{flex:"1 1 420px",minWidth:0,padding:"10px 12px",border:"1px solid var(--line)",borderRadius:9,fontSize:13.5}}/>
-        <button onClick={()=>connect(urlDraft)} style={solid}>Connect</button>
-        {conn==="connected" && <button onClick={disconnect} style={ghost}>Disconnect</button>}
-      </div>
-    </div>
-  );
-}
-
-// ---------- REDUCE ----------
-function Reduce({items,logWear,connected}){
-  const winners=[...items].filter(i=>i.status==="star").sort((a,b)=>b.wears-a.wears);
-  const under=[...items].filter(i=>i.status==="improve").sort((a,b)=>b.gap-a.gap);
-  return (
-    <div>
-      <Lead>Underused pieces on the left carry the highest cost per wear but can still reach their category benchmark. Each shows how many more wears closes the gap. Your proven pieces sit on the right, already earning their keep.</Lead>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:22,marginTop:22}}>
-        <Panel title="Underused — worth pushing" count={under.length}>
-          {under.map(i=>(
-            <div key={i.id} style={rowS}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={rowTitle}>{i.item}</div>
-                <div style={rowMeta}>{i.category} · benchmark {i.range}</div>
-                <div style={{fontSize:12.5,color:"var(--accent)",marginTop:6}}>{i.gap} more wear{i.gap===1?"":"s"} → {money(r2(i.total/i.targetWears))}/wear</div>
-              </div>
-              <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-                <Cpw value={i.cpw} size={25}/>
-                <button onClick={()=>logWear(i.id)} style={mini}>+ Wore it</button>
-              </div>
+      <div style={{maxWidth:1180,margin:"0 auto",padding:"30px 22px 90px"}}>
+        {/* ledger strip */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",borderTop:"1px solid var(--line)",borderBottom:"1px solid var(--line)",marginBottom:34}}>
+          {[["Invested",money(stats.spend)],["Average CPW",money(r2(stats.avg))],["Never worn",stats.never],["Season",seasonNow()]].map(([l,v],i)=>(
+            <div key={l} style={{padding:"16px 18px",borderLeft:i?"1px solid var(--lineSoft)":"none"}}>
+              <div className="lbl">{l}</div>
+              <div style={{fontFamily:display,fontSize:25,marginTop:4}}>{v}</div>
             </div>
           ))}
-        </Panel>
-        <Panel title="Proven — already at target" count={winners.length}>
-          {winners.map(i=>(
-            <div key={i.id} style={rowS}>
-              <div style={{flex:1,minWidth:0}}><div style={rowTitle}>{i.item}</div><div style={rowMeta}>{i.category} · {i.wears} wears</div></div>
-              <div style={{textAlign:"right"}}><Cpw value={i.cpw} size={25}/><div style={{marginTop:6}}><Pill status="star"/></div></div>
-            </div>
+        </div>
+
+        {tab==="closet" && <Closet items={items} onEdit={setEditing} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
+        {tab==="today" && <Today items={items} logWear={logWear} onEdit={setEditing}/>}
+        {tab==="underused" && <Underused items={items} logWear={logWear} onEdit={setEditing}/>}
+        {tab==="rotate" && <Rotate items={items} logWear={logWear}/>}
+        {tab==="sell" && <Sell items={items} onEdit={setEditing}/>}
+        {tab==="lookbook" && <Lookbook outfits={outfits} addOutfit={addOutfit} delOutfit={delOutfit}/>}
+      </div>
+
+      {editing && <ItemForm value={editing} onSave={saveItem} onCancel={()=>setEditing(null)} onDelete={deleteItem} logClean={logClean}/>}
+      {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,letterSpacing:".04em",padding:"11px 20px",zIndex:60}}>{toast}</div>}
+    </div>
+  );
+}
+
+/* ---------------- closet grid ---------------- */
+function Closet({items,onEdit,logWear,exportJSON,importJSON}){
+  const [cat,setCat]=useState("All");
+  const [sort,setSort]=useState("cpw");
+  const fileRef=useRef();
+  const cats=["All",...CATS.filter(c=>items.some(i=>i.category===c))];
+  let list=items.filter(i=>cat==="All"||i.category===cat);
+  list=[...list].sort((a,b)=>
+    sort==="cpw" ? (b.cpw===Infinity?1e9:b.cpw)-(a.cpw===Infinity?1e9:a.cpw)
+    : sort==="dormant" ? (b.dormant??1e9)-(a.dormant??1e9)
+    : sort==="price" ? b.total-a.total
+    : a.wears-b.wears);
+  return (
+    <div>
+      <Lead>Everything you own, with what each piece actually costs you per wear. Tap any piece to edit its details, log a wear, or record a cleaning.</Lead>
+      <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"center",marginBottom:22}}>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+          {cats.map(c=>(
+            <button key={c} onClick={()=>setCat(c)} className="hoverlift" style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",
+              color:cat===c?"var(--ink)":"var(--faint)",borderBottom:cat===c?"1px solid var(--ink)":"1px solid transparent",paddingBottom:3}}>{c}</button>
           ))}
-        </Panel>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <span className="lbl">Sort</span>
+          <select value={sort} onChange={e=>setSort(e.target.value)} style={{...inp,padding:"7px 9px",fontSize:12}}>
+            <option value="cpw">Highest cost per wear</option>
+            <option value="dormant">Longest unworn</option>
+            <option value="wears">Fewest wears</option>
+            <option value="price">Most invested</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"30px 22px"}}>
+        {list.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
+      </div>
+
+      <div style={{marginTop:52,paddingTop:22,borderTop:"1px solid var(--line)",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+        <span className="lbl">Backup</span>
+        <button onClick={exportJSON} style={ghost}>Export closet</button>
+        <input ref={fileRef} type="file" accept="application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";}}/>
+        <button onClick={()=>fileRef.current.click()} style={ghost}>Import backup</button>
+        <span style={{fontSize:12,color:"var(--faint)"}}>Your closet lives in this browser. Export now and then so you keep a copy.</span>
       </div>
     </div>
   );
 }
 
-// ---------- TRADE UP (dynamic, per category) ----------
-function Trade({items,logWear}){
-  const byCat={};
-  items.forEach(i=>{ (byCat[i.category]=byCat[i.category]||[]).push(i); });
-
-  const blocks=[];
-  CAT_ORDER.concat(Object.keys(byCat)).forEach(cat=>{
-    if(!byCat[cat] || blocks.find(b=>b.cat===cat)) return;
-    const list=byCat[cat];
-    const staples=[...list].filter(i=>i.wears>0).sort((a,b)=>b.wears-a.wears).slice(0,2);
-    const candidates=[...list].filter(i=>i.cpw>i.mid && !staples.includes(i)).sort((a,b)=>b.cpw-a.cpw);
-    if(staples.length && candidates.length) blocks.push({cat,staples,candidates});
-  });
-
+function Card({i,onEdit,logWear}){
   return (
     <div>
-      <Lead>Grouped by category. The pieces you reach for most prove where heavy rotation happens — so that's where wearing an underused piece instead pays off fastest. Each suggestion shows where its cost per wear lands as you rotate it in.</Lead>
-      <div style={{marginTop:22,display:"flex",flexDirection:"column",gap:26}}>
-        {blocks.map(b=>(
-          <div key={b.cat} style={{...panelBox,padding:22}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",flexWrap:"wrap",gap:8}}>
-              <div style={{fontFamily:serif,fontSize:22,letterSpacing:"-0.01em"}}>{b.cat}</div>
-              <div style={{fontSize:13,color:"var(--mut)"}}>
-                You reach for <b style={{color:"var(--ink)"}}>{b.staples.map(s=>s.item).join(", ")}</b>
-              </div>
-            </div>
-            <div style={{fontSize:13,color:"var(--mut)",marginTop:4}}>Instead, consider rotating in:</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:12,marginTop:14}}>
-              {b.candidates.map(c=>{
-                const target=b.staples[0].wears; // wear it like your top staple
-                const proj = c.total/(c.wears+Math.max(1,target-c.wears));
-                return (
-                  <div key={c.id} style={{background:"var(--paper)",border:"1px solid var(--lineSoft)",borderRadius:10,padding:14}}>
-                    <div style={{fontSize:14.5,fontWeight:500,lineHeight:1.25}}>{c.item}</div>
-                    <div style={rowMeta}>{money(c.total)} · {c.wears} wear{c.wears===1?"":"s"}</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:10}}>
-                      <Cpw value={c.cpw} size={22}/>
-                      <span style={{fontSize:12,color:"var(--mut)"}}>now</span>
-                    </div>
-                    <div style={{fontSize:12.5,color:"var(--star)",marginTop:6}}>
-                      → {money(r2(proj))}/wear at {Math.max(c.wears+1,target)} wears
-                    </div>
-                    <button onClick={()=>logWear(c.id)} style={{...mini,marginTop:10}}>+ Wore it today</button>
-                  </div>
-                );
-              })}
+      <div onClick={()=>onEdit(i)} className="hoverlift" style={{cursor:"pointer",position:"relative"}}>
+        <Thumb src={i.img} label={(i.brand||i.name||"?").slice(0,1)}/>
+        {i.status==="sell" && <div style={{position:"absolute",top:8,left:8,background:"#fff",padding:"3px 7px"}}><Tag tone="flag">Reconsider</Tag></div>}
+      </div>
+      <div style={{marginTop:11}}>
+        <div style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||"\u00A0"}</div>
+        <div style={{fontSize:13.5,color:"var(--mut)",marginTop:3,lineHeight:1.4}}>{i.name}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:9,gap:8}}>
+          <Money v={i.cpw} size={15}/><span style={{fontSize:11,color:"var(--faint)"}}>per wear</span>
+        </div>
+        <div style={{fontSize:11,color:"var(--faint)",marginTop:4}}>{i.wears} wears &middot; {lastWornLabel(i)}</div>
+        <button onClick={()=>logWear(i.id)} style={{...mini,marginTop:9,width:"100%"}}>Wear today</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- get dressed ---------------- */
+function Today({items,logWear,onEdit}){
+  const s=seasonNow();
+  const [seasonOnly,setSeasonOnly]=useState(true);
+  const pool=items.filter(i=>!seasonOnly||i.season==="All year"||i.season===s);
+  const cats=CATS.filter(c=>pool.some(i=>i.category===c));
+  return (
+    <div>
+      <Lead>Sorted by what you haven&rsquo;t touched in longest, grouped so you can build a whole look: a top, a bottom, a shoe. Logging a wear drops its cost per wear on the spot.</Lead>
+      <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:26}}>
+        <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?solid:ghost}>{s} pieces</button>
+        <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?ghost:solid}>Everything</button>
+      </div>
+      {cats.map(c=>{
+        const list=[...pool].filter(i=>i.category===c)
+          .sort((a,b)=>(b.dormant??1e9)-(a.dormant??1e9)||a.wears-b.wears).slice(0,4);
+        return (
+          <div key={c} style={{marginBottom:38}}>
+            <SectionRule right={`${list.length} shown`}>{c}</SectionRule>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"26px 22px"}}>
+              {list.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-// ---------- SELL ----------
-function Sell({items}){
-  const sell=[...items].filter(i=>i.status==="sell").sort((a,b)=>b.cpw-a.cpw);
+/* ---------------- underused ---------------- */
+function Underused({items,logWear,onEdit}){
+  const under=items.filter(i=>i.status==="improve").sort((a,b)=>b.gap-a.gap);
+  const proven=items.filter(i=>i.status==="star").sort((a,b)=>b.wears-a.wears);
   return (
     <div>
-      <Lead>These can't reach their benchmark within a realistic lifetime of wears — the maths won't bend. Keep the ones you genuinely love as sentimental exceptions; let the rest go and recover some cost through resale.</Lead>
-      <div style={{...panelBox,marginTop:22,overflow:"hidden"}}>
-        {sell.map((i,idx)=>(
-          <div key={i.id} style={{...rowS,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+      <Lead>These carry the highest cost per wear but can still reach their category benchmark. Each shows how many more wears closes the gap.</Lead>
+      <SectionRule right={`${under.length} pieces`}>Worth pushing</SectionRule>
+      <div style={{border:"1px solid var(--line)",marginBottom:44}}>
+        {under.map((i,idx)=>(
+          <div key={i.id} style={{display:"flex",gap:14,alignItems:"center",padding:14,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div style={{width:56,flex:"0 0 auto",cursor:"pointer"}} onClick={()=>onEdit(i)}><Thumb src={i.img} label={(i.brand||i.name).slice(0,1)}/></div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={rowTitle}>{i.item}</div>
-              <div style={rowMeta}>{i.category} · {money(i.total)} · {i.wears} wear{i.wears===1?"":"s"} · needs ~{i.targetWears} wears, ceiling {i.ceil}</div>
+              <div style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</div>
+              <div style={{fontSize:13.5,color:"var(--mut)",marginTop:2}}>{i.name}</div>
+              <div style={{fontSize:12,marginTop:6}}>{i.gap} more wear{i.gap===1?"":"s"} reaches {money(r2(i.total/i.targetWears))} &middot; benchmark {i.range}</div>
             </div>
-            <div style={{textAlign:"right"}}><Cpw value={i.cpw} size={25}/><div style={{marginTop:6}}><Pill status="sell"/></div></div>
+            <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+              <Money v={i.cpw} size={17}/>
+              <button onClick={()=>logWear(i.id)} style={mini}>Wear today</button>
+            </div>
           </div>
         ))}
       </div>
+      <SectionRule right={`${proven.length} pieces`}>Already earning their keep</SectionRule>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"26px 22px"}}>
+        {proven.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
+      </div>
     </div>
   );
 }
 
-// ---------- TODAY (grouped by category) ----------
-function Today({items,logWear}){
-  const byCat={};
-  items.forEach(i=>{ (byCat[i.category]=byCat[i.category]||[]).push(i); });
-  const cats=CAT_ORDER.filter(c=>byCat[c]);
+/* ---------------- rotate in ---------------- */
+function Rotate({items,logWear}){
+  const byCat={}; items.forEach(i=>{(byCat[i.category]=byCat[i.category]||[]).push(i);});
+  const blocks=[];
+  CATS.forEach(cat=>{
+    const list=byCat[cat]; if(!list) return;
+    const staples=[...list].filter(i=>i.wears>0).sort((a,b)=>b.wears-a.wears).slice(0,2);
+    const cands=[...list].filter(i=>i.cpw>i.mid&&!staples.includes(i)).sort((a,b)=>b.cpw-a.cpw);
+    if(staples.length&&cands.length) blocks.push({cat,staples,cands});
+  });
   return (
     <div>
-      <Lead>Your least-worn pieces, grouped by category so you can build a whole look from the corners of your closet. Pick a top, a bottom, a shoe. Logging a wear drops its cost per wear on the spot.</Lead>
-      <div style={{marginTop:22,display:"flex",flexDirection:"column",gap:22}}>
-        {cats.map(cat=>{
-          const list=[...byCat[cat]].sort((a,b)=>a.wears-b.wears).slice(0,5);
-          return (
-            <div key={cat}>
-              <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10}}>
-                <div style={{fontFamily:serif,fontSize:19}}>{cat}</div>
-                <div style={{flex:1,height:1,background:"var(--line)"}}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:12}}>
-                {list.map(i=>(
-                  <div key={i.id} style={{...panelBox,padding:14,display:"flex",flexDirection:"column",justifyContent:"space-between",minHeight:132}}>
-                    <div>
-                      <div style={{fontFamily:serif,fontSize:16,lineHeight:1.22}}>{i.item}</div>
-                      <div style={rowMeta}>{i.wears} wear{i.wears===1?"":"s"}</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:10}}>
-                      <Cpw value={i.cpw} size={20}/>
-                      <button onClick={()=>logWear(i.id)} style={mini}>+ Wear</button>
-                    </div>
+      <Lead>The pieces you reach for most prove where heavy rotation happens, so that&rsquo;s where wearing something underused instead pays off fastest.</Lead>
+      {blocks.map(b=>(
+        <div key={b.cat} style={{marginBottom:44}}>
+          <SectionRule right={`you reach for ${b.staples[0].brand||b.staples[0].name}`}>{b.cat}</SectionRule>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:"26px 22px"}}>
+            {b.cands.map(c=>{
+              const target=b.staples[0].wears;
+              const proj=c.total/(c.wears+Math.max(1,target-c.wears));
+              return (
+                <div key={c.id}>
+                  <Thumb src={c.img} label={(c.brand||c.name).slice(0,1)}/>
+                  <div style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600,marginTop:10}}>{c.brand||"\u00A0"}</div>
+                  <div style={{fontSize:13,color:"var(--mut)",marginTop:3}}>{c.name}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:8,paddingTop:8,borderTop:"1px solid var(--lineSoft)"}}>
+                    <Money v={c.cpw} size={14}/><span style={{fontSize:11,color:"var(--faint)"}}>now</span>
                   </div>
-                ))}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:4}}>
+                    <span style={{fontSize:14,fontWeight:500,color:"var(--good)"}}>{money(r2(proj))}</span>
+                    <span style={{fontSize:11,color:"var(--faint)"}}>at {Math.max(c.wears+1,target)} wears</span>
+                  </div>
+                  <button onClick={()=>logWear(c.id)} style={{...mini,marginTop:10,width:"100%"}}>Wear today</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- sell ---------------- */
+function Sell({items,onEdit}){
+  const list=items.filter(i=>i.status==="sell").sort((a,b)=>b.cpw-a.cpw);
+  const recover=list.reduce((s,i)=>s+(+i.resale||0),0);
+  return (
+    <div>
+      <Lead>These can&rsquo;t reach their benchmark within a realistic lifetime of wears; the maths won&rsquo;t bend. Keep the ones you love as exceptions and let the rest go. Add a resale estimate to any piece to see what you&rsquo;d recover.</Lead>
+      {recover>0 && <div style={{border:"1px solid var(--line)",padding:"16px 18px",marginBottom:26}}>
+        <div className="lbl">Estimated recovery</div>
+        <div style={{fontFamily:display,fontSize:28,marginTop:4}}>{money(recover)}</div></div>}
+      {list.length===0 ? <Empty>Nothing flagged. Every piece can still reach its benchmark.</Empty> :
+      <div style={{border:"1px solid var(--line)"}}>
+        {list.map((i,idx)=>(
+          <div key={i.id} style={{display:"flex",gap:14,alignItems:"center",padding:14,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div style={{width:60,flex:"0 0 auto",cursor:"pointer"}} onClick={()=>onEdit(i)}><Thumb src={i.img} label={(i.brand||i.name).slice(0,1)}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</div>
+              <div style={{fontSize:13.5,color:"var(--mut)",marginTop:2}}>{i.name}</div>
+              <div style={{fontSize:11.5,color:"var(--faint)",marginTop:6}}>
+                {money(i.total)} spent &middot; {i.wears} wear{i.wears===1?"":"s"} &middot; needs ~{i.targetWears}, realistic ceiling {i.ceil}
               </div>
             </div>
-          );
-        })}
-      </div>
+            <div style={{textAlign:"right"}}>
+              <Money v={i.cpw} size={17}/>
+              <div style={{marginTop:7}}>{+i.resale>0
+                ? <span style={{fontSize:11.5,color:"var(--good)"}}>{money(+i.resale)} resale</span>
+                : <button onClick={()=>onEdit(i)} style={{...mini,fontSize:11}}>Add resale</button>}</div>
+            </div>
+          </div>
+        ))}
+      </div>}
     </div>
   );
 }
 
-// ---------- FULL WARDROBE (spreadsheet order) ----------
-function AllItems({items,logWear}){
-  const list=[...items].sort((a,b)=>a.id-b.id);
-  const th={textAlign:"left",fontSize:11.5,fontWeight:600,color:"var(--mut)",letterSpacing:"0.02em",padding:"10px 12px",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"};
-  const td={fontSize:13.5,padding:"11px 12px",borderBottom:"1px solid var(--lineSoft)",whiteSpace:"nowrap"};
-  const num={...td,textAlign:"right",fontVariantNumeric:"tabular-nums"};
+/* ---------------- lookbook ---------------- */
+function Lookbook({outfits,addOutfit,delOutfit}){
+  const ref=useRef();
   return (
     <div>
-      <Lead>Every piece in the same order as your sheet. Total is price plus special care; cost per wear updates as you log wears here or in the sheet.</Lead>
-      <div style={{...panelBox,marginTop:22,overflowX:"auto"}}>
-        <table style={{borderCollapse:"collapse",width:"100%",minWidth:640}}>
-          <thead>
-            <tr>
-              <th style={{...th,textAlign:"right"}}>#</th>
-              <th style={th}>Item</th>
-              <th style={th}>Category</th>
-              <th style={{...th,textAlign:"right"}}>Total</th>
-              <th style={{...th,textAlign:"right"}}>Wears</th>
-              <th style={{...th,textAlign:"right"}}>Cost / wear</th>
-              <th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map(i=>(
-              <tr key={i.id}>
-                <td style={{...num,color:"var(--mut)"}}>{i.id}</td>
-                <td style={{...td,fontWeight:500,whiteSpace:"normal"}}>{i.item}</td>
-                <td style={{...td,color:"var(--mut)"}}>{i.category}</td>
-                <td style={num}>{money(i.total)}</td>
-                <td style={num}>{i.wears}</td>
-                <td style={{...num,fontFamily:serif,fontSize:15}}>{i.cpw===Infinity?"∞":money(r2(i.cpw))}</td>
-                <td style={{...td,textAlign:"right"}}>
-                  <div style={{display:"inline-flex",gap:6}}>
-                    <button onClick={()=>logWear(i.id,-1)} disabled={i.wears<=0}
-                      style={{...mini,opacity:i.wears<=0?0.4:1,cursor:i.wears<=0?"default":"pointer"}}>− Wear</button>
-                    <button onClick={()=>logWear(i.id)} style={mini}>+ Wear</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Lead>Outfits you want to remember. Scroll it when nothing feels right. Photos stay on this device.</Lead>
+      <div style={{marginBottom:24}}>
+        <input ref={ref} type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>{[...e.target.files].forEach(addOutfit);e.target.value="";}}/>
+        <button onClick={()=>ref.current.click()} style={solid}>Add photos</button>
       </div>
+      {outfits.length===0 ? <Empty>No looks saved yet.</Empty> :
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
+        {outfits.map(o=>(
+          <div key={o.id} style={{position:"relative"}}>
+            <img src={o.src} alt="" style={{width:"100%",aspectRatio:"3 / 4",objectFit:"cover",display:"block"}}/>
+            <button onClick={()=>delOutfit(o.id)} style={{position:"absolute",top:8,right:8,width:26,height:26,background:"#fff",fontSize:15,lineHeight:"24px"}}>×</button>
+          </div>
+        ))}
+      </div>}
     </div>
   );
 }
 
-// ---- shared ----
-function Lead({children}){ return <p style={{fontSize:15,color:"var(--mut)",lineHeight:1.6,maxWidth:720,margin:0}}>{children}</p>; }
-function Panel({title,count,children}){
+/* ---------------- add / edit ---------------- */
+function ItemForm({value,onSave,onCancel,onDelete,logClean}){
+  const isNew=value.id==null;
+  const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",season:"All year",baseWears:0,img:"",...value});
+  const fileRef=useRef();
+  const set=(k,val)=>setV(s=>({...s,[k]:val}));
+  const wearsShown=(+v.baseWears||0)+((value.history||[]).length);
+  async function pick(f){ try{ set("img",await fileToThumb(f,700,.85)); }catch(e){} }
   return (
-    <div style={panelBox}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid var(--lineSoft)"}}>
-        <div style={{fontFamily:serif,fontSize:17}}>{title}</div><div style={{fontSize:12.5,color:"var(--mut)"}}>{count}</div>
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.35)",zIndex:50,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"5vh 16px"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",width:"100%",maxWidth:520,padding:26,border:"1px solid var(--line)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+          <div style={{fontFamily:display,fontSize:24}}>{isNew?"Add a piece":"Edit piece"}</div>
+          <button onClick={onCancel} style={{fontSize:20,color:"var(--faint)"}}>×</button>
+        </div>
+
+        <div style={{display:"flex",gap:14,marginTop:20}}>
+          <div style={{width:96,flex:"0 0 auto"}}>
+            <Thumb src={v.img} label="+"/>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])pick(e.target.files[0]);e.target.value="";}}/>
+            <button onClick={()=>fileRef.current.click()} style={{...mini,width:"100%",marginTop:7}}>Photo</button>
+          </div>
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:10}}>
+            <Field label="Brand"><input value={v.brand} onChange={e=>set("brand",e.target.value)} placeholder="Issey Miyake" style={inp}/></Field>
+            <Field label="Piece"><input value={v.name} onChange={e=>set("name",e.target.value)} placeholder="Pleated trousers" style={inp}/></Field>
+          </div>
+        </div>
+
+        <div style={{marginTop:12}}>
+          <Field label="Image URL (optional)"><input value={(v.img||"").startsWith("data:")?"":v.img} onChange={e=>set("img",e.target.value)} placeholder="https://…" style={inp}/></Field>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
+          <Field label="Category">
+            <select value={v.category} onChange={e=>set("category",e.target.value)} style={inp}>{CATS.map(c=><option key={c}>{c}</option>)}</select>
+          </Field>
+          <Field label="Season">
+            <select value={v.season} onChange={e=>set("season",e.target.value)} style={inp}>{SEASONS.map(c=><option key={c}>{c}</option>)}</select>
+          </Field>
+          <Field label="Price paid"><input type="number" value={v.price} onChange={e=>set("price",e.target.value)} style={inp}/></Field>
+          <Field label="Care spent so far"><input type="number" value={v.care} onChange={e=>set("care",e.target.value)} style={inp}/></Field>
+          <Field label="Cost per cleaning"><input type="number" value={v.cleanCost} onChange={e=>set("cleanCost",e.target.value)} style={inp}/></Field>
+          <Field label="Resale estimate"><input type="number" value={v.resale} onChange={e=>set("resale",e.target.value)} style={inp}/></Field>
+          <Field label="Wears before tracking"><input type="number" value={v.baseWears} onChange={e=>set("baseWears",e.target.value)} style={inp}/></Field>
+          <Field label="Total wears"><div style={{...inp,background:"var(--soft)",color:"var(--mut)"}}>{wearsShown}</div></Field>
+        </div>
+
+        {!isNew && +v.cleanCost>0 &&
+          <button onClick={()=>{logClean(v.id);set("care",(+v.care||0)+(+v.cleanCost||0));}} style={{...ghost,marginTop:14,width:"100%"}}>
+            Log a cleaning (+{money(+v.cleanCost)})
+          </button>}
+
+        <div style={{display:"flex",gap:10,marginTop:22,flexWrap:"wrap"}}>
+          <button onClick={()=>onSave({...v,price:+v.price||0,care:+v.care||0,cleanCost:+v.cleanCost||0,resale:+v.resale||0,baseWears:+v.baseWears||0})} style={{...solid,flex:1}}>
+            {isNew?"Add to closet":"Save changes"}</button>
+          {!isNew && <button onClick={()=>onDelete(v.id)} style={{...ghost,color:"var(--flag)",borderColor:"var(--flag)"}}>Remove</button>}
+        </div>
       </div>
-      <div>{children}</div>
     </div>
   );
 }
-const panelBox={background:"var(--panel)",border:"1px solid var(--line)",borderRadius:14};
-const rowS={display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,padding:"14px 18px"};
-const rowTitle={fontSize:15,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis"};
-const rowMeta={fontSize:12.5,color:"var(--mut)",marginTop:3};
-const tabBtn={fontSize:13.5,fontWeight:500,color:"var(--mut)",background:"transparent",border:"none",padding:"9px 14px",borderRadius:10};
-const tabActive={color:"var(--ink)",background:"var(--panel)",border:"1px solid var(--line)"};
-const solid={fontSize:13,fontWeight:600,color:"var(--paper)",background:"var(--accent)",border:"none",padding:"10px 16px",borderRadius:10};
-const ghost={display:"inline-flex",alignItems:"center",fontSize:12.5,fontWeight:500,color:"var(--mut)",background:"transparent",border:"1px solid var(--line)",padding:"7px 12px",borderRadius:9};
-const mini={fontSize:12,fontWeight:600,color:"var(--accent)",background:"var(--paper)",border:"1px solid var(--line)",padding:"6px 11px",borderRadius:8};
+function Field({label,children}){
+  return <label style={{display:"block"}}><div className="lbl" style={{marginBottom:5}}>{label}</div>{children}</label>;
+}
+
+/* ---------------- styles ---------------- */
+const inp={width:"100%",padding:"9px 11px",border:"1px solid var(--line)",background:"#fff",borderRadius:0,fontSize:13.5,outline:"none"};
+const solid={fontSize:11.5,letterSpacing:".12em",textTransform:"uppercase",color:"#fff",background:"var(--ink)",padding:"12px 20px"};
+const ghost={fontSize:11.5,letterSpacing:".12em",textTransform:"uppercase",color:"var(--ink)",background:"transparent",border:"1px solid var(--ink)",padding:"11px 18px"};
+const mini={fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink)",background:"transparent",border:"1px solid var(--line)",padding:"8px 10px"};
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
