@@ -614,22 +614,43 @@ function RankList({title,items,render}){
 /* ---------------- lookbook ---------------- */
 function Lookbook({outfits,addOutfit,delOutfit}){
   const ref=useRef();
+  const [open,setOpen]=useState(null); // id of expanded photo
+  const openIdx=outfits.findIndex(o=>o.id===open);
+  const openPhoto=openIdx>=0?outfits[openIdx]:null;
+  function step(delta){
+    if(openIdx<0) return;
+    const next=outfits[openIdx+delta];
+    if(next) setOpen(next.id);
+  }
   return (
     <div>
-      <Lead>Outfits you want to remember. Scroll it when nothing feels right. Photos stay on this device.</Lead>
+      <Lead>Outfits you want to remember. Tap a photo to view it larger. Photos stay on this device.</Lead>
       <div style={{marginBottom:24}}>
         <input ref={ref} type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>{[...e.target.files].forEach(addOutfit);e.target.value="";}}/>
         <button onClick={()=>ref.current.click()} style={solid}>Add photos</button>
       </div>
       {outfits.length===0 ? <Empty>No looks saved yet.</Empty> :
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(96px,1fr))",gap:8}}>
         {outfits.map(o=>(
-          <div key={o.id} style={{position:"relative"}}>
-            <img src={o.src} alt="" style={{width:"100%",aspectRatio:"3 / 4",objectFit:"cover",display:"block"}}/>
-            <button onClick={()=>delOutfit(o.id)} style={{position:"absolute",top:8,right:8,width:26,height:26,background:"#fff",fontSize:15,lineHeight:"24px"}}>×</button>
+          <div key={o.id} onClick={()=>setOpen(o.id)} className="hoverlift" style={{position:"relative",cursor:"pointer"}}>
+            <img src={o.src} alt="" style={{width:"100%",aspectRatio:"3 / 4",objectFit:"cover",display:"block",background:"var(--soft)"}}/>
           </div>
         ))}
       </div>}
+
+      {openPhoto && (
+        <div onClick={()=>setOpen(null)} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.9)",zIndex:70,
+          display:"flex",alignItems:"center",justifyContent:"center",padding:"6vh 16px"}}>
+          <button onClick={()=>setOpen(null)} style={{position:"absolute",top:18,right:22,fontSize:26,color:"#fff",lineHeight:1}}>×</button>
+          {openIdx>0 && <button onClick={e=>{e.stopPropagation();step(-1);}} style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:30,color:"#fff",padding:10}}>‹</button>}
+          {openIdx<outfits.length-1 && <button onClick={e=>{e.stopPropagation();step(1);}} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",fontSize:30,color:"#fff",padding:10}}>›</button>}
+          <img onClick={e=>e.stopPropagation()} src={openPhoto.src} alt="" style={{maxWidth:"100%",maxHeight:"84vh",objectFit:"contain",display:"block"}}/>
+          <button onClick={e=>{e.stopPropagation();delOutfit(openPhoto.id);setOpen(null);}}
+            style={{position:"absolute",bottom:24,left:"50%",transform:"translateX(-50%)",fontSize:11.5,letterSpacing:".12em",textTransform:"uppercase",color:"#fff",border:"1px solid #fff",padding:"9px 16px"}}>
+            Remove photo
+          </button>
+        </div>
+      )}
     </div>
   );
 }
