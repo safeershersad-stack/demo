@@ -106,7 +106,7 @@ const SEED = [
   ["","Rome vintage dress","Dresses",80,0,4,"Summer"],
 ].map((r,i)=>({
   id:i, brand:r[0], name:r[1], category:r[2], price:r[3], care:r[4],
-  baseWears:r[5], season:r[6], resale:0, cleanCost:0, img:"", history:[]
+  baseWears:r[5], season:r[6], resale:0, cleanCost:0, history:[]
 }));
 
 /* ---------------- persistence ---------------- */
@@ -117,20 +117,24 @@ const store={
   async set(k,v){ try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
     try{ localStorage.setItem(k,v); }catch(e){} }
 };
-function idbOpen(){return new Promise((res,rej)=>{let q;try{q=indexedDB.open("closet_media",1);}catch(e){return rej(e);}
-  q.onupgradeneeded=()=>{const d=q.result; if(!d.objectStoreNames.contains("outfits"))d.createObjectStore("outfits",{keyPath:"id",autoIncrement:true});};
+/* IndexedDB: large-capacity on-device store for all photos (item photos + lookbook) */
+function idbOpen(){return new Promise((res,rej)=>{let q;try{q=indexedDB.open("closet_media",2);}catch(e){return rej(e);}
+  q.onupgradeneeded=()=>{const d=q.result;
+    if(!d.objectStoreNames.contains("outfits")) d.createObjectStore("outfits",{keyPath:"id",autoIncrement:true});
+    if(!d.objectStoreNames.contains("itemImgs")) d.createObjectStore("itemImgs");
+  };
   q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});}
 async function idbAll(n){const db=await idbOpen();return new Promise((res,rej)=>{const o=[];const c=db.transaction(n).objectStore(n).openCursor();
-  c.onsuccess=e=>{const k=e.target.result; if(k){o.push(k.value);k.continue();}else res(o);}; c.onerror=()=>rej(c.error);});}
-async function idbPut(n,v){const db=await idbOpen();return new Promise((res,rej)=>{const r=db.transaction(n,"readwrite").objectStore(n).put(v);
-  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+  c.onsuccess=e=>{const k=e.target.result; if(k){o.push({key:k.key,value:k.value});k.continue();}else res(o);}; c.onerror=()=>rej(c.error);});}
+async function idbPut(n,v,key){const db=await idbOpen();return new Promise((res,rej)=>{const st=db.transaction(n,"readwrite").objectStore(n);
+  const r=key!==undefined?st.put(v,key):st.put(v); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
 async function idbDel(n,k){const db=await idbOpen();return new Promise((res,rej)=>{const r=db.transaction(n,"readwrite").objectStore(n).delete(k);
   r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);});}
 function fileToThumb(file,max,q){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);
   img.onload=()=>{const s=Math.min(1,max/Math.max(img.width,img.height));const w=Math.round(img.width*s),h=Math.round(img.height*s);
     const cv=document.createElement("canvas");cv.width=w;cv.height=h;cv.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(u);
     try{res(cv.toDataURL("image/jpeg",q||0.82));}catch(e){rej(e);} };
-  img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("img"));}; img.src=u;});}
+  img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read that image"));}; img.src=u;});}
 
 /* ---------------- helpers ---------------- */
 const money=n=>n==null?"—":"$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
@@ -159,7 +163,7 @@ function derive(it){
 }
 
 /* ---------------- primitives ---------------- */
-function Money({v,size=15,weight=500}){return <span style={{fontSize:size,fontWeight:weight,letterSpacing:"-0.01em"}}>{v===Infinity?"—":money(r2(v))}</span>;}
+function Money({v,size=15,weight=500,tone}){return <span style={{fontSize:size,fontWeight:weight,letterSpacing:"-0.01em",color:tone||"inherit"}}>{v===Infinity?"—":money(r2(v))}</span>;}
 function Tag({children,tone}){
   const c=tone==="flag"?"var(--flag)":tone==="good"?"var(--good)":"var(--mut)";
   return <span style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:c,border:`1px solid ${c==="var(--mut)"?"var(--line)":c}`,padding:"3px 7px",whiteSpace:"nowrap"}}>{children}</span>;
@@ -168,7 +172,7 @@ function Thumb({src,ratio="1 / 1",label}){
   return src
     ? <img src={src} alt="" style={{width:"100%",aspectRatio:ratio,objectFit:"cover",display:"block",background:"var(--soft)"}}/>
     : <div style={{width:"100%",aspectRatio:ratio,background:"var(--soft)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <span style={{fontFamily:display,fontSize:26,color:"#D8D5D0"}}>{label||"—"}</span></div>;
+        <span style={{fontFamily:display,fontSize:22,color:"#D8D5D0"}}>{label||"—"}</span></div>;
 }
 function Lead({children}){return <p style={{fontSize:14,color:"var(--mut)",lineHeight:1.7,maxWidth:"64ch",margin:"0 0 26px"}}>{children}</p>;}
 function SectionRule({children,right}){
@@ -180,22 +184,81 @@ function SectionRule({children,right}){
 }
 function Empty({children}){return <div style={{border:"1px solid var(--line)",padding:"46px 20px",textAlign:"center",color:"var(--mut)",fontSize:13.5}}>{children}</div>;}
 
+/* wear stepper: minus / count / plus */
+function Stepper({i,logWear}){
+  return (
+    <div style={{display:"inline-flex",border:"1px solid var(--line)"}}>
+      <button onClick={()=>logWear(i.id,-1)} disabled={i.wears<=0} title="Remove a wear"
+        style={{...stepBtn,opacity:i.wears<=0?.35:1,cursor:i.wears<=0?"default":"pointer"}}>−</button>
+      <span style={{...stepBtn,borderLeft:"1px solid var(--line)",borderRight:"1px solid var(--line)",cursor:"default",minWidth:26}}>{i.wears}</span>
+      <button onClick={()=>logWear(i.id)} title="Log a wear" style={stepBtn}>+</button>
+    </div>
+  );
+}
+
+/* universal row used across Closet / Today / Underused / Rotate / Sell */
+function ItemRow({i,src,onEdit,logWear,note,trailing,flagReconsider}){
+  return (
+    <div style={{display:"flex",gap:14,alignItems:"center",padding:14}}>
+      <div style={{width:58,flex:"0 0 auto",cursor:onEdit?"pointer":"default",position:"relative"}} onClick={()=>onEdit&&onEdit(i)}>
+        <Thumb src={src} label={(i.brand||i.name||"?").slice(0,1)}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</span>
+          {flagReconsider && i.status==="sell" && <Tag tone="flag">Reconsider</Tag>}
+        </div>
+        <div style={{fontSize:13.5,color:"var(--mut)",marginTop:2}}>{i.name}</div>
+        <div style={{fontSize:11.5,color:"var(--faint)",marginTop:6}}>
+          {i.category} &middot; {money(i.total)} &middot; {i.wears} wear{i.wears===1?"":"s"} &middot; {lastWornLabel(i)}
+        </div>
+        {note && <div style={{fontSize:12,marginTop:6}}>{note}</div>}
+      </div>
+      <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:9}}>
+        <Money v={i.cpw} size={17} tone={i.status==="sell"?"var(--flag)":undefined}/>
+        {trailing || (logWear && <Stepper i={i} logWear={logWear}/>)}
+      </div>
+    </div>
+  );
+}
+function RowList({children}){ return <div style={{border:"1px solid var(--line)"}}>{React.Children.map(children,(c,idx)=>
+  <div style={{borderTop:idx?"1px solid var(--lineSoft)":"none"}}>{c}</div>)}</div>; }
+
 /* ---------------- app ---------------- */
 function App(){
   const [tab,setTab]=useState("closet");
   const [raw,setRaw]=useState(null);
+  const [itemImgs,setItemImgs]=useState({});
   const [outfits,setOutfits]=useState([]);
   const [editing,setEditing]=useState(null);
   const [toast,setToast]=useState("");
 
+  function flash(m){ setToast(m); setTimeout(()=>setToast(""),2200); }
+
   useEffect(()=>{(async()=>{
     const s=await store.get(KEY);
-    if(s){ try{ setRaw(JSON.parse(s)); }catch(e){ setRaw(SEED); } } else setRaw(SEED);
-    try{ setOutfits((await idbAll("outfits")).sort((a,b)=>b.ts-a.ts)); }catch(e){}
+    let list = s ? (()=>{ try{ return JSON.parse(s); }catch(e){ return SEED; } })() : SEED;
+
+    // one-time migration: move any photo previously embedded in the saved JSON
+    // (which silently stopped saving once it hit the browser's localStorage limit)
+    // into IndexedDB, which has far more room.
+    let imgMap={};
+    try{ (await idbAll("itemImgs")).forEach(x=>{ imgMap[x.key]=x.value; }); }catch(e){}
+    let migratedCount=0;
+    for(const it of list){
+      if(it.img){
+        try{ await idbPut("itemImgs", it.img, it.id); imgMap[it.id]=it.img; migratedCount++; }catch(e){}
+        delete it.img;
+      }
+    }
+    setRaw(list);
+    setItemImgs(imgMap);
+    if(migratedCount>0){ store.set(KEY,JSON.stringify(list)); flash(`Moved ${migratedCount} photo${migratedCount===1?"":"s"} to on-device storage`); }
+
+    try{ setOutfits((await idbAll("outfits")).map(x=>x.value).sort((a,b)=>b.ts-a.ts)); }catch(e){}
   })();},[]);
   useEffect(()=>{ if(raw) store.set(KEY,JSON.stringify(raw)); },[raw]);
 
-  function flash(m){ setToast(m); setTimeout(()=>setToast(""),1800); }
   const items=useMemo(()=>raw?raw.map(derive):[],[raw]);
 
   function logWear(id,delta=1){
@@ -210,18 +273,33 @@ function App(){
     setRaw(rs=>rs.map(r=>r.id===id?{...r,care:(+r.care||0)+(+r.cleanCost||0)}:r));
     flash("Cleaning cost added");
   }
-  function saveItem(v){
+  async function saveItem(v){
+    const { img, ...rest } = v;
+    let newId=null;
+    const id = rest.id;
     setRaw(rs=>{
-      if(v.id==null){ const id=rs.reduce((m,r)=>Math.max(m,r.id),-1)+1;
-        return [...rs,{...v,id,history:[],baseWears:+v.baseWears||0}]; }
-      return rs.map(r=>r.id===v.id?{...r,...v}:r);
+      if(id==null){ newId = rs.reduce((m,r)=>Math.max(m,r.id),-1)+1;
+        return [...rs,{...rest,id:newId,history:[],baseWears:+rest.baseWears||0}]; }
+      return rs.map(r=>r.id===id?{...r,...rest}:r);
     });
-    setEditing(null); flash(v.id==null?"Piece added":"Piece updated");
+    const finalId = id==null ? newId : id;
+    if(img!==undefined){
+      try{
+        if(img){ await idbPut("itemImgs",img,finalId); setItemImgs(m=>({...m,[finalId]:img})); }
+        else { await idbDel("itemImgs",finalId); setItemImgs(m=>{const n={...m}; delete n[finalId]; return n;}); }
+      }catch(e){ flash("Saved the piece, but the photo didn't save"); }
+    }
+    setEditing(null); flash(id==null?"Piece added":"Piece updated");
   }
-  function deleteItem(id){ setRaw(rs=>rs.filter(r=>r.id!==id)); setEditing(null); flash("Piece removed"); }
+  async function deleteItem(id){
+    setRaw(rs=>rs.filter(r=>r.id!==id));
+    try{ await idbDel("itemImgs",id); }catch(e){}
+    setItemImgs(m=>{const n={...m}; delete n[id]; return n;});
+    setEditing(null); flash("Piece removed");
+  }
 
   async function addOutfit(f){ try{ const src=await fileToThumb(f,1100,.82); const rec={src,ts:Date.now()};
-    const id=await idbPut("outfits",rec); setOutfits(o=>[{...rec,id},...o]); }catch(e){} }
+    const id=await idbPut("outfits",rec); setOutfits(o=>[{...rec,id},...o]); }catch(e){ flash("Could not save that photo"); } }
   async function delOutfit(id){ try{ await idbDel("outfits",id); setOutfits(o=>o.filter(x=>x.id!==id)); }catch(e){} }
 
   function exportJSON(){
@@ -232,7 +310,7 @@ function App(){
   function importJSON(file){
     const fr=new FileReader();
     fr.onload=()=>{ try{ const d=JSON.parse(fr.result);
-      if(Array.isArray(d)){ setRaw(d.map(x=>({history:[],baseWears:0,resale:0,cleanCost:0,img:"",season:"All year",...x}))); flash("Closet restored"); } }
+      if(Array.isArray(d)){ setRaw(d.map(x=>({history:[],baseWears:0,resale:0,cleanCost:0,season:"All year",...x}))); flash("Closet restored"); } }
       catch(e){ flash("Could not read that file"); } };
     fr.readAsText(file);
   }
@@ -246,11 +324,10 @@ function App(){
 
   if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
 
-  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["sell","Sell or keep"],["lookbook","Lookbook"]];
+  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
 
   return (
     <div>
-      {/* masthead */}
       <div style={{borderBottom:"1px solid var(--line)",textAlign:"center",padding:"26px 20px 0"}}>
         <div style={{fontFamily:display,fontSize:34,fontWeight:400,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
         <div className="lbl" style={{marginTop:9}}>Cost per wear &middot; {stats.count} pieces</div>
@@ -265,7 +342,6 @@ function App(){
       </div>
 
       <div style={{maxWidth:1180,margin:"0 auto",padding:"30px 22px 90px"}}>
-        {/* ledger strip */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",borderTop:"1px solid var(--line)",borderBottom:"1px solid var(--line)",marginBottom:34}}>
           {[["Invested",money(stats.spend)],["Average CPW",money(r2(stats.avg))],["Never worn",stats.never],["Season",seasonNow()]].map(([l,v],i)=>(
             <div key={l} style={{padding:"16px 18px",borderLeft:i?"1px solid var(--lineSoft)":"none"}}>
@@ -275,22 +351,23 @@ function App(){
           ))}
         </div>
 
-        {tab==="closet" && <Closet items={items} onEdit={setEditing} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
-        {tab==="today" && <Today items={items} logWear={logWear} onEdit={setEditing}/>}
-        {tab==="underused" && <Underused items={items} logWear={logWear} onEdit={setEditing}/>}
-        {tab==="rotate" && <Rotate items={items} logWear={logWear}/>}
-        {tab==="sell" && <Sell items={items} onEdit={setEditing}/>}
+        {tab==="closet" && <Closet items={items} itemImgs={itemImgs} onEdit={setEditing} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
+        {tab==="today" && <Today items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
+        {tab==="underused" && <Underused items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
+        {tab==="rotate" && <Rotate items={items} itemImgs={itemImgs} logWear={logWear}/>}
+        {tab==="sell" && <Sell items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
+        {tab==="insights" && <Insights items={items}/>}
         {tab==="lookbook" && <Lookbook outfits={outfits} addOutfit={addOutfit} delOutfit={delOutfit}/>}
       </div>
 
-      {editing && <ItemForm value={editing} onSave={saveItem} onCancel={()=>setEditing(null)} onDelete={deleteItem} logClean={logClean}/>}
-      {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,letterSpacing:".04em",padding:"11px 20px",zIndex:60}}>{toast}</div>}
+      {editing && <ItemForm value={editing} src={editing.id!=null?itemImgs[editing.id]:null} onSave={saveItem} onCancel={()=>setEditing(null)} onDelete={deleteItem} logClean={logClean}/>}
+      {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,letterSpacing:".04em",padding:"11px 20px",zIndex:60,maxWidth:"88vw",textAlign:"center"}}>{toast}</div>}
     </div>
   );
 }
 
-/* ---------------- closet grid ---------------- */
-function Closet({items,onEdit,logWear,exportJSON,importJSON}){
+/* ---------------- closet ---------------- */
+function Closet({items,itemImgs,onEdit,logWear,exportJSON,importJSON}){
   const [cat,setCat]=useState("All");
   const [sort,setSort]=useState("cpw");
   const fileRef=useRef();
@@ -303,7 +380,7 @@ function Closet({items,onEdit,logWear,exportJSON,importJSON}){
     : a.wears-b.wears);
   return (
     <div>
-      <Lead>Everything you own, with what each piece actually costs you per wear. Tap any piece to edit its details, log a wear, or record a cleaning.</Lead>
+      <Lead>Everything you own, with what each piece actually costs you per wear. Tap the photo to edit, or use the stepper to log or undo a wear.</Lead>
       <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"center",marginBottom:22}}>
         <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
           {cats.map(c=>(
@@ -322,11 +399,11 @@ function Closet({items,onEdit,logWear,exportJSON,importJSON}){
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"30px 22px"}}>
-        {list.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
-      </div>
+      <RowList>
+        {list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear} flagReconsider/>)}
+      </RowList>
 
-      <div style={{marginTop:52,paddingTop:22,borderTop:"1px solid var(--line)",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{marginTop:36,paddingTop:22,borderTop:"1px solid var(--line)",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
         <span className="lbl">Backup</span>
         <button onClick={exportJSON} style={ghost}>Export closet</button>
         <input ref={fileRef} type="file" accept="application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";}}/>
@@ -337,48 +414,26 @@ function Closet({items,onEdit,logWear,exportJSON,importJSON}){
   );
 }
 
-function Card({i,onEdit,logWear}){
-  return (
-    <div>
-      <div onClick={()=>onEdit(i)} className="hoverlift" style={{cursor:"pointer",position:"relative"}}>
-        <Thumb src={i.img} label={(i.brand||i.name||"?").slice(0,1)}/>
-        {i.status==="sell" && <div style={{position:"absolute",top:8,left:8,background:"#fff",padding:"3px 7px"}}><Tag tone="flag">Reconsider</Tag></div>}
-      </div>
-      <div style={{marginTop:11}}>
-        <div style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||"\u00A0"}</div>
-        <div style={{fontSize:13.5,color:"var(--mut)",marginTop:3,lineHeight:1.4}}>{i.name}</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:9,gap:8}}>
-          <Money v={i.cpw} size={15}/><span style={{fontSize:11,color:"var(--faint)"}}>per wear</span>
-        </div>
-        <div style={{fontSize:11,color:"var(--faint)",marginTop:4}}>{i.wears} wears &middot; {lastWornLabel(i)}</div>
-        <button onClick={()=>logWear(i.id)} style={{...mini,marginTop:9,width:"100%"}}>Wear today</button>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- get dressed ---------------- */
-function Today({items,logWear,onEdit}){
+function Today({items,itemImgs,logWear,onEdit}){
   const s=seasonNow();
   const [seasonOnly,setSeasonOnly]=useState(true);
   const pool=items.filter(i=>!seasonOnly||i.season==="All year"||i.season===s);
   const cats=CATS.filter(c=>pool.some(i=>i.category===c));
   return (
     <div>
-      <Lead>Sorted by what you haven&rsquo;t touched in longest, grouped so you can build a whole look: a top, a bottom, a shoe. Logging a wear drops its cost per wear on the spot.</Lead>
+      <Lead>Sorted by what you haven&rsquo;t touched in longest, grouped so you can build a whole look: a top, a bottom, a shoe.</Lead>
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:26}}>
         <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?solid:ghost}>{s} pieces</button>
         <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?ghost:solid}>Everything</button>
       </div>
       {cats.map(c=>{
         const list=[...pool].filter(i=>i.category===c)
-          .sort((a,b)=>(b.dormant??1e9)-(a.dormant??1e9)||a.wears-b.wears).slice(0,4);
+          .sort((a,b)=>(b.dormant??1e9)-(a.dormant??1e9)||a.wears-b.wears).slice(0,5);
         return (
-          <div key={c} style={{marginBottom:38}}>
+          <div key={c} style={{marginBottom:36}}>
             <SectionRule right={`${list.length} shown`}>{c}</SectionRule>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"26px 22px"}}>
-              {list.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
-            </div>
+            <RowList>{list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}/>)}</RowList>
           </div>
         );
       })}
@@ -387,39 +442,31 @@ function Today({items,logWear,onEdit}){
 }
 
 /* ---------------- underused ---------------- */
-function Underused({items,logWear,onEdit}){
+function Underused({items,itemImgs,logWear,onEdit}){
   const under=items.filter(i=>i.status==="improve").sort((a,b)=>b.gap-a.gap);
   const proven=items.filter(i=>i.status==="star").sort((a,b)=>b.wears-a.wears);
   return (
     <div>
       <Lead>These carry the highest cost per wear but can still reach their category benchmark. Each shows how many more wears closes the gap.</Lead>
       <SectionRule right={`${under.length} pieces`}>Worth pushing</SectionRule>
-      <div style={{border:"1px solid var(--line)",marginBottom:44}}>
-        {under.map((i,idx)=>(
-          <div key={i.id} style={{display:"flex",gap:14,alignItems:"center",padding:14,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
-            <div style={{width:56,flex:"0 0 auto",cursor:"pointer"}} onClick={()=>onEdit(i)}><Thumb src={i.img} label={(i.brand||i.name).slice(0,1)}/></div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</div>
-              <div style={{fontSize:13.5,color:"var(--mut)",marginTop:2}}>{i.name}</div>
-              <div style={{fontSize:12,marginTop:6}}>{i.gap} more wear{i.gap===1?"":"s"} reaches {money(r2(i.total/i.targetWears))} &middot; benchmark {i.range}</div>
-            </div>
-            <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-              <Money v={i.cpw} size={17}/>
-              <button onClick={()=>logWear(i.id)} style={mini}>Wear today</button>
-            </div>
-          </div>
-        ))}
+      <div style={{marginBottom:44}}>
+        <RowList>
+          {under.map(i=>(
+            <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}
+              note={`+${i.gap} wear${i.gap===1?"":"s"} reaches ${money(r2(i.total/i.targetWears))} · benchmark ${i.range}`}/>
+          ))}
+        </RowList>
       </div>
       <SectionRule right={`${proven.length} pieces`}>Already earning their keep</SectionRule>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:"26px 22px"}}>
-        {proven.map(i=><Card key={i.id} i={i} onEdit={onEdit} logWear={logWear}/>)}
-      </div>
+      <RowList>
+        {proven.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}/>)}
+      </RowList>
     </div>
   );
 }
 
 /* ---------------- rotate in ---------------- */
-function Rotate({items,logWear}){
+function Rotate({items,itemImgs,logWear}){
   const byCat={}; items.forEach(i=>{(byCat[i.category]=byCat[i.category]||[]).push(i);});
   const blocks=[];
   CATS.forEach(cat=>{
@@ -431,67 +478,142 @@ function Rotate({items,logWear}){
   return (
     <div>
       <Lead>The pieces you reach for most prove where heavy rotation happens, so that&rsquo;s where wearing something underused instead pays off fastest.</Lead>
-      {blocks.map(b=>(
+      {blocks.map(b=>{
+        const target=b.staples[0].wears;
+        return (
         <div key={b.cat} style={{marginBottom:44}}>
           <SectionRule right={`you reach for ${b.staples[0].brand||b.staples[0].name}`}>{b.cat}</SectionRule>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:"26px 22px"}}>
+          <RowList>
             {b.cands.map(c=>{
-              const target=b.staples[0].wears;
               const proj=c.total/(c.wears+Math.max(1,target-c.wears));
               return (
-                <div key={c.id}>
-                  <Thumb src={c.img} label={(c.brand||c.name).slice(0,1)}/>
-                  <div style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600,marginTop:10}}>{c.brand||"\u00A0"}</div>
-                  <div style={{fontSize:13,color:"var(--mut)",marginTop:3}}>{c.name}</div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:8,paddingTop:8,borderTop:"1px solid var(--lineSoft)"}}>
-                    <Money v={c.cpw} size={14}/><span style={{fontSize:11,color:"var(--faint)"}}>now</span>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:4}}>
-                    <span style={{fontSize:14,fontWeight:500,color:"var(--good)"}}>{money(r2(proj))}</span>
-                    <span style={{fontSize:11,color:"var(--faint)"}}>at {Math.max(c.wears+1,target)} wears</span>
-                  </div>
-                  <button onClick={()=>logWear(c.id)} style={{...mini,marginTop:10,width:"100%"}}>Wear today</button>
-                </div>
+                <ItemRow key={c.id} i={c} src={itemImgs[c.id]} logWear={logWear}
+                  note={<span>now <b>{money(r2(c.cpw))}</b> &rarr; <span style={{color:"var(--good)"}}>{money(r2(proj))}</span> at {Math.max(c.wears+1,target)} wears</span>}/>
               );
             })}
-          </div>
+          </RowList>
         </div>
-      ))}
+      );})}
     </div>
   );
 }
 
 /* ---------------- sell ---------------- */
-function Sell({items,onEdit}){
+function Sell({items,itemImgs,logWear,onEdit}){
   const list=items.filter(i=>i.status==="sell").sort((a,b)=>b.cpw-a.cpw);
   const recover=list.reduce((s,i)=>s+(+i.resale||0),0);
   return (
     <div>
-      <Lead>These can&rsquo;t reach their benchmark within a realistic lifetime of wears; the maths won&rsquo;t bend. Keep the ones you love as exceptions and let the rest go. Add a resale estimate to any piece to see what you&rsquo;d recover.</Lead>
+      <Lead>These can&rsquo;t reach their benchmark within a realistic lifetime of wears; the maths won&rsquo;t bend. Keep the ones you love as exceptions and let the rest go. Add a resale estimate to see what you&rsquo;d recover.</Lead>
       {recover>0 && <div style={{border:"1px solid var(--line)",padding:"16px 18px",marginBottom:26}}>
         <div className="lbl">Estimated recovery</div>
         <div style={{fontFamily:display,fontSize:28,marginTop:4}}>{money(recover)}</div></div>}
       {list.length===0 ? <Empty>Nothing flagged. Every piece can still reach its benchmark.</Empty> :
-      <div style={{border:"1px solid var(--line)"}}>
-        {list.map((i,idx)=>(
-          <div key={i.id} style={{display:"flex",gap:14,alignItems:"center",padding:14,borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
-            <div style={{width:60,flex:"0 0 auto",cursor:"pointer"}} onClick={()=>onEdit(i)}><Thumb src={i.img} label={(i.brand||i.name).slice(0,1)}/></div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</div>
-              <div style={{fontSize:13.5,color:"var(--mut)",marginTop:2}}>{i.name}</div>
-              <div style={{fontSize:11.5,color:"var(--faint)",marginTop:6}}>
-                {money(i.total)} spent &middot; {i.wears} wear{i.wears===1?"":"s"} &middot; needs ~{i.targetWears}, realistic ceiling {i.ceil}
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <Money v={i.cpw} size={17}/>
-              <div style={{marginTop:7}}>{+i.resale>0
+      <RowList>
+        {list.map(i=>(
+          <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}
+            note={`needs ~${i.targetWears} wears, realistic ceiling ${i.ceil}`}
+            trailing={<div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+              {+i.resale>0
                 ? <span style={{fontSize:11.5,color:"var(--good)"}}>{money(+i.resale)} resale</span>
-                : <button onClick={()=>onEdit(i)} style={{...mini,fontSize:11}}>Add resale</button>}</div>
+                : <button onClick={()=>onEdit(i)} style={{...mini,fontSize:11}}>Add resale</button>}
+              <Stepper i={i} logWear={logWear}/>
+            </div>}/>
+        ))}
+      </RowList>}
+    </div>
+  );
+}
+
+/* ---------------- insights ---------------- */
+function Insights({items}){
+  const cats = CATS.filter(c=>items.some(i=>i.category===c));
+  const catStats = cats.map(c=>{
+    const list=items.filter(i=>i.category===c);
+    const spend=list.reduce((s,i)=>s+i.total,0);
+    const worn=list.filter(i=>i.wears>0);
+    const avg=worn.length?worn.reduce((s,i)=>s+i.cpw,0)/worn.length:null;
+    const b=BENCH[c];
+    return {cat:c,count:list.length,spend,avg,ratio:avg?avg/b.mid:null,range:b.range};
+  }).sort((a,b)=>b.spend-a.spend);
+  const maxSpend=Math.max(1,...catStats.map(c=>c.spend));
+
+  const onTarget=items.filter(i=>i.status==="star").length;
+  const improve=items.filter(i=>i.status==="improve").length;
+  const flagged=items.filter(i=>i.status==="sell").length;
+  const neverWorn=items.filter(i=>i.wears===0);
+  const mostWorn=[...items].sort((a,b)=>b.wears-a.wears).slice(0,5);
+  const longestDormant=[...items].filter(i=>i.dormant!==null).sort((a,b)=>b.dormant-a.dormant).slice(0,5);
+  const highestCpw=[...items].filter(i=>i.cpw!==Infinity).sort((a,b)=>b.cpw-a.cpw).slice(0,5);
+  const potentialRecovery=items.filter(i=>i.status==="sell").reduce((s,i)=>s+(+i.resale||0),0);
+
+  return (
+    <div>
+      <Lead>A read on where your money and wear actually go.</Lead>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",border:"1px solid var(--line)",marginBottom:40}}>
+        {[["On target",onTarget],["Worth pushing",improve],["Flagged",flagged],["Never worn",neverWorn.length]].map(([l,v],idx)=>(
+          <div key={l} style={{padding:"16px 18px",borderLeft:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div className="lbl">{l}</div>
+            <div style={{fontFamily:display,fontSize:26,marginTop:4}}>{v}</div>
+            <div style={{fontSize:11,color:"var(--faint)",marginTop:2}}>of {items.length} pieces</div>
+          </div>
+        ))}
+      </div>
+
+      <SectionRule right="spend & average cost per wear">Category breakdown</SectionRule>
+      <div style={{border:"1px solid var(--line)",marginBottom:40}}>
+        {catStats.map((c,idx)=>(
+          <div key={c.cat} style={{padding:"12px 16px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
+              <span style={{fontSize:13.5,fontWeight:500}}>{c.cat}</span>
+              <span style={{fontSize:12,color:"var(--faint)"}}>{c.count} piece{c.count===1?"":"s"}</span>
+            </div>
+            <div style={{height:5,background:"var(--lineSoft)",marginTop:8,position:"relative"}}>
+              <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${(c.spend/maxSpend)*100}%`,background:"var(--ink)"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:6,flexWrap:"wrap",gap:6}}>
+              <span style={{fontSize:11.5,color:"var(--mut)"}}>{money(c.spend)} invested</span>
+              <span style={{fontSize:11.5,color:c.ratio&&c.ratio>1.5?"var(--flag)":"var(--mut)"}}>
+                {c.avg?`${money(r2(c.avg))} avg CPW`:"not yet worn"} &middot; target {c.range}
+              </span>
             </div>
           </div>
         ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:24}}>
+        <RankList title="Most worn" items={mostWorn} render={i=>`${i.wears} wear${i.wears===1?"":"s"}`}/>
+        <RankList title="Longest dormant" items={longestDormant} render={i=>lastWornLabel(i)}/>
+        <RankList title="Highest cost per wear" items={highestCpw} render={i=>money(r2(i.cpw))}/>
+      </div>
+
+      {potentialRecovery>0 && <div style={{border:"1px solid var(--line)",padding:"16px 18px",marginTop:30}}>
+        <div className="lbl">Potential resale recovery</div>
+        <div style={{fontFamily:display,fontSize:28,marginTop:4}}>{money(potentialRecovery)}</div>
+        <div style={{fontSize:12,color:"var(--faint)",marginTop:4}}>from flagged pieces with a resale estimate on file</div>
       </div>}
+
+      {neverWorn.length>0 && <div style={{marginTop:30}}>
+        <SectionRule right={`${neverWorn.length} pieces`}>Never worn</SectionRule>
+        <div style={{fontSize:13,color:"var(--mut)",lineHeight:1.9}}>{neverWorn.map(i=>i.brand||i.name).join(" · ")}</div>
+      </div>}
+    </div>
+  );
+}
+function RankList({title,items,render}){
+  return (
+    <div>
+      <div className="lbl" style={{marginBottom:10}}>{title}</div>
+      <div style={{border:"1px solid var(--line)"}}>
+        {items.length===0 && <div style={{padding:12,fontSize:12,color:"var(--faint)"}}>Not enough data yet.</div>}
+        {items.map((i,idx)=>(
+          <div key={i.id} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"10px 12px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <span style={{fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.brand||i.name}</span>
+            <span style={{fontSize:12,color:"var(--mut)",whiteSpace:"nowrap"}}>{render(i)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -520,13 +642,16 @@ function Lookbook({outfits,addOutfit,delOutfit}){
 }
 
 /* ---------------- add / edit ---------------- */
-function ItemForm({value,onSave,onCancel,onDelete,logClean}){
+function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
   const isNew=value.id==null;
-  const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",season:"All year",baseWears:0,img:"",...value});
+  const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",season:"All year",baseWears:0,...value});
+  const [imgLocal,setImgLocal]=useState(src||"");
+  const [urlDraft,setUrlDraft]=useState((src&&!src.startsWith("data:"))?src:"");
+  const [err,setErr]=useState("");
   const fileRef=useRef();
   const set=(k,val)=>setV(s=>({...s,[k]:val}));
   const wearsShown=(+v.baseWears||0)+((value.history||[]).length);
-  async function pick(f){ try{ set("img",await fileToThumb(f,700,.85)); }catch(e){} }
+  async function pick(f){ setErr(""); try{ setImgLocal(await fileToThumb(f,700,.85)); }catch(e){ setErr("Could not read that photo. Try a different file."); } }
   return (
     <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.35)",zIndex:50,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"5vh 16px"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",width:"100%",maxWidth:520,padding:26,border:"1px solid var(--line)"}}>
@@ -537,18 +662,22 @@ function ItemForm({value,onSave,onCancel,onDelete,logClean}){
 
         <div style={{display:"flex",gap:14,marginTop:20}}>
           <div style={{width:96,flex:"0 0 auto"}}>
-            <Thumb src={v.img} label="+"/>
+            <Thumb src={imgLocal} label="+"/>
             <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])pick(e.target.files[0]);e.target.value="";}}/>
             <button onClick={()=>fileRef.current.click()} style={{...mini,width:"100%",marginTop:7}}>Photo</button>
+            {imgLocal && <button onClick={()=>{setImgLocal("");setUrlDraft("");}} style={{...mini,width:"100%",marginTop:6,color:"var(--flag)"}}>Clear</button>}
           </div>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:10}}>
             <Field label="Brand"><input value={v.brand} onChange={e=>set("brand",e.target.value)} placeholder="Issey Miyake" style={inp}/></Field>
             <Field label="Piece"><input value={v.name} onChange={e=>set("name",e.target.value)} placeholder="Pleated trousers" style={inp}/></Field>
           </div>
         </div>
+        {err && <div style={{fontSize:12,color:"var(--flag)",marginTop:8}}>{err}</div>}
 
         <div style={{marginTop:12}}>
-          <Field label="Image URL (optional)"><input value={(v.img||"").startsWith("data:")?"":v.img} onChange={e=>set("img",e.target.value)} placeholder="https://…" style={inp}/></Field>
+          <Field label="Image URL (optional)">
+            <input value={urlDraft} onChange={e=>{setUrlDraft(e.target.value);setImgLocal(e.target.value);}} placeholder="https://…" style={inp}/>
+          </Field>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
@@ -572,7 +701,7 @@ function ItemForm({value,onSave,onCancel,onDelete,logClean}){
           </button>}
 
         <div style={{display:"flex",gap:10,marginTop:22,flexWrap:"wrap"}}>
-          <button onClick={()=>onSave({...v,price:+v.price||0,care:+v.care||0,cleanCost:+v.cleanCost||0,resale:+v.resale||0,baseWears:+v.baseWears||0})} style={{...solid,flex:1}}>
+          <button onClick={()=>onSave({...v,img:imgLocal,price:+v.price||0,care:+v.care||0,cleanCost:+v.cleanCost||0,resale:+v.resale||0,baseWears:+v.baseWears||0})} style={{...solid,flex:1}}>
             {isNew?"Add to closet":"Save changes"}</button>
           {!isNew && <button onClick={()=>onDelete(v.id)} style={{...ghost,color:"var(--flag)",borderColor:"var(--flag)"}}>Remove</button>}
         </div>
@@ -589,6 +718,7 @@ const inp={width:"100%",padding:"9px 11px",border:"1px solid var(--line)",backgr
 const solid={fontSize:11.5,letterSpacing:".12em",textTransform:"uppercase",color:"#fff",background:"var(--ink)",padding:"12px 20px"};
 const ghost={fontSize:11.5,letterSpacing:".12em",textTransform:"uppercase",color:"var(--ink)",background:"transparent",border:"1px solid var(--ink)",padding:"11px 18px"};
 const mini={fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink)",background:"transparent",border:"1px solid var(--line)",padding:"8px 10px"};
+const stepBtn={fontSize:13,padding:"6px 11px",minWidth:26,textAlign:"center",display:"inline-block"};
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
