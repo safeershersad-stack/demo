@@ -416,19 +416,12 @@ function Closet({items,itemImgs,onEdit,logWear,exportJSON,importJSON}){
 
 /* ---------------- get dressed ---------------- */
 function Today({items,itemImgs,logWear,onEdit}){
-  const s=seasonNow();
-  const [seasonOnly,setSeasonOnly]=useState(true);
-  const pool=items.filter(i=>!seasonOnly||i.season==="All year"||i.season===s);
-  const cats=CATS.filter(c=>pool.some(i=>i.category===c));
+  const cats=CATS.filter(c=>items.some(i=>i.category===c));
   return (
     <div>
       <Lead>Sorted by what you haven&rsquo;t touched in longest, grouped so you can build a whole look: a top, a bottom, a shoe.</Lead>
-      <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:26}}>
-        <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?solid:ghost}>{s} pieces</button>
-        <button onClick={()=>setSeasonOnly(v=>!v)} style={seasonOnly?ghost:solid}>Everything</button>
-      </div>
       {cats.map(c=>{
-        const list=[...pool].filter(i=>i.category===c)
+        const list=[...items].filter(i=>i.category===c)
           .sort((a,b)=>(b.dormant??1e9)-(a.dormant??1e9)||a.wears-b.wears).slice(0,5);
         return (
           <div key={c} style={{marginBottom:36}}>
@@ -646,7 +639,6 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
   const isNew=value.id==null;
   const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",season:"All year",baseWears:0,...value});
   const [imgLocal,setImgLocal]=useState(src||"");
-  const [urlDraft,setUrlDraft]=useState((src&&!src.startsWith("data:"))?src:"");
   const [err,setErr]=useState("");
   const fileRef=useRef();
   const set=(k,val)=>setV(s=>({...s,[k]:val}));
@@ -665,7 +657,7 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
             <Thumb src={imgLocal} label="+"/>
             <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])pick(e.target.files[0]);e.target.value="";}}/>
             <button onClick={()=>fileRef.current.click()} style={{...mini,width:"100%",marginTop:7}}>Photo</button>
-            {imgLocal && <button onClick={()=>{setImgLocal("");setUrlDraft("");}} style={{...mini,width:"100%",marginTop:6,color:"var(--flag)"}}>Clear</button>}
+            {imgLocal && <button onClick={()=>setImgLocal("")} style={{...mini,width:"100%",marginTop:6,color:"var(--flag)"}}>Clear</button>}
           </div>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:10}}>
             <Field label="Brand"><input value={v.brand} onChange={e=>set("brand",e.target.value)} placeholder="Issey Miyake" style={inp}/></Field>
@@ -673,12 +665,6 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
           </div>
         </div>
         {err && <div style={{fontSize:12,color:"var(--flag)",marginTop:8}}>{err}</div>}
-
-        <div style={{marginTop:12}}>
-          <Field label="Image URL (optional)">
-            <input value={urlDraft} onChange={e=>{setUrlDraft(e.target.value);setImgLocal(e.target.value);}} placeholder="https://…" style={inp}/>
-          </Field>
-        </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
           <Field label="Category">
