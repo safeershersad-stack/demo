@@ -13,10 +13,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     --bg:#FFFFFF; --soft:#FAFAF9; --ink:#111111; --mut:#6E6E6E; --faint:#9B9B9B;
-    --line:#E6E4E1; --lineSoft:#F0EEEB; --flag:#8C2F1F; --good:#2F5D45;
+    --line:#E6E4E1; --lineSoft:#F0EEEB; --flag:#8C2F1F; --good:#2F5D45; --win:#C1291E;
     --sans:"Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
     --display:"Cormorant Garamond",Georgia,serif;
   }
@@ -45,79 +46,56 @@ const BENCH = {
   "Tops":{range:"$2",mid:2,ceil:80},
   "Bottoms":{range:"$1–5",mid:3,ceil:100},
   "Sweaters & Knitwear":{range:"$3–6",mid:4.5,ceil:80},
-  "Coats":{range:"$1–5",mid:3,ceil:150},
-  "Jackets":{range:"$2–6",mid:4,ceil:150},
+  "Coats & Jackets":{range:"$1–6",mid:3.5,ceil:150},
   "Dresses":{range:"$3–10",mid:6.5,ceil:40},
   "Shoes":{range:"$1–4",mid:3.5,ceil:150},
-  "Workwear":{range:"$5–15",mid:10,ceil:120},
-  "Special Occasionwear":{range:"$10–20",mid:15,ceil:15},
+  "Special Occasionwear":{range:"$10–50",mid:25,ceil:15},
   "Accessories":{range:"$2–8",mid:5,ceil:100},
 };
-const CATS = ["Tops","Sweaters & Knitwear","Dresses","Bottoms","Coats","Jackets","Shoes","Accessories","Workwear","Special Occasionwear"];
+const CATS = ["Tops","Sweaters & Knitwear","Dresses","Bottoms","Coats & Jackets","Shoes","Accessories","Special Occasionwear"];
 const SEASONS = ["All year","Spring","Summer","Fall","Winter"];
 
-/* ---------------- seed data ---------------- */
-const SEED = [
-  ["Burberry","Trench","Coats",275,125,75,"Fall"],
-  ["Wardrobe NYC","Sweater","Sweaters & Knitwear",110,0,2,"Winter"],
-  ["Silk & Cashmere","Triangle scarf","Accessories",130,0,20,"Winter"],
-  ["Junior Galliano","Jacket","Special Occasionwear",250,0,4,"All year"],
-  ["No.6 Store","Pony shoes","Shoes",400,0,5,"Fall"],
-  ["Frankie Shop","Coat","Coats",400,0,25,"Winter"],
-  ["","Turkey coat","Coats",400,0,5,"Winter"],
-  ["Muji","Black sweater","Sweaters & Knitwear",40,0,20,"Winter"],
-  ["Muji","V-neck sweater vest","Sweaters & Knitwear",20,0,10,"Fall"],
-  ["Silk & Cashmere","Grey vest","Sweaters & Knitwear",300,0,15,"Fall"],
-  ["SWDN","Sweater (Cueva)","Sweaters & Knitwear",185,0,1,"Winter"],
-  ["Sundae School","Chinos","Workwear",120,0,1,"All year"],
-  ["Uniqlo","Culottes","Bottoms",20,0,5,"Summer"],
-  ["GU","Jeans","Bottoms",20,0,3,"All year"],
-  ["Asket","Culottes","Bottoms",100,0,20,"All year"],
-  ["Asket","Striped dress","Dresses",100,0,5,"Summer"],
-  ["Asket","Vest with ribbons","Tops",80,0,5,"All year"],
-  ["Snow Peak","Jacket","Jackets",150,0,100,"All year"],
-  ["Snow Peak","Skirt","Bottoms",80,0,14,"All year"],
-  ["Issey Miyake","Sweater, blue/black","Sweaters & Knitwear",80,0,3,"Winter"],
-  ["Issey Miyake","Sweater, silver","Sweaters & Knitwear",100,0,2,"Winter"],
-  ["Haruta","Spock shoes","Shoes",40,0,1,"All year"],
-  ["","Japan dress pants","Workwear",100,0,1,"All year"],
-  ["","Japan beret","Accessories",70,0,2,"Fall"],
-  ["","French hat","Accessories",80,0,1,"All year"],
-  ["","Pink dress, UK","Dresses",110,0,4,"Summer"],
-  ["Simone Rocha","Crocs clogs","Shoes",200,0,50,"All year"],
-  ["Simone Rocha","Crocs heels","Shoes",300,0,4,"All year"],
-  ["","Boyfriend shirt, double collar","Tops",100,0,4,"All year"],
-  ["","Boyfriend shirt, tie around","Tops",100,0,0,"All year"],
-  ["","Boyfriend shirt pants, wide","Bottoms",150,0,10,"All year"],
-  ["","Boyfriend shirt pants, tapered","Bottoms",150,0,2,"All year"],
-  ["& Other Stories","White shirt","Workwear",70,0,0,"All year"],
-  ["Maison Margiela","Replica slip dress","Dresses",200,0,10,"Summer"],
-  ["IF Soho","Blazer","Workwear",200,0,2,"All year"],
-  ["Yohji Yamamoto","Dress, IF Soho","Special Occasionwear",950,0,1,"All year"],
-  ["Y's","Dress, Japan","Dresses",80,0,2,"All year"],
-  ["Uniqlo x JW Anderson","Heavy knit, blue","Sweaters & Knitwear",70,0,10,"Winter"],
-  ["Uniqlo x JW Anderson","Heavy knit, beige","Sweaters & Knitwear",70,0,5,"Winter"],
-  ["Uniqlo x JW Anderson","Light knit, stripes","Tops",40,0,10,"Spring"],
-  ["Rag & Bone","Pink dress shirt","Workwear",80,0,8,"All year"],
-  ["Cecilie Bahnsen","Black party dress","Special Occasionwear",600,200,8,"All year"],
-  ["Not Conventional","Culottes, Kyoto","Bottoms",150,0,0,"All year"],
-  ["Not Conventional","Pleated shirt, Kyoto","Tops",150,0,0,"All year"],
-  ["Valentino","Dress, Rome","Special Occasionwear",100,100,4,"All year"],
-  ["","Rome vintage dress","Dresses",80,0,4,"Summer"],
-].map((r,i)=>({
-  id:i, brand:r[0], name:r[1], category:r[2], price:r[3], care:r[4],
-  baseWears:r[5], season:r[6], resale:0, cleanCost:0, history:[]
-}));
+/* maps a category no longer in CATS (from data saved under an older version) to its
+   nearest current home, so nothing is stranded when categories are merged or removed */
+function reassignCategory(cat,name){
+  if(cat==="Jackets"||cat==="Coats") return "Coats & Jackets";
+  if(cat==="Workwear"){
+    const n=(name||"").toLowerCase();
+    if(/pant|trouser|chino|culotte|jean|skirt|short/.test(n)) return "Bottoms";
+    if(/blazer|jacket|coat/.test(n)) return "Coats & Jackets";
+    return "Tops";
+  }
+  return CATS.includes(cat) ? cat : "Tops";
+}
 
-/* ---------------- persistence ---------------- */
+/* ---------------- id helpers: stable, human-readable, immune to reordering ---------------- */
+function slugify(s){
+  return (s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/(^-+|-+$)/g,"") || "item";
+}
+function uniqueId(base,taken){
+  let id=base,n=2;
+  while(taken.has(id)){ id=`${base}-${n}`; n++; }
+  taken.add(id);
+  return id;
+}
+
+/* ---------------- Supabase: the source of truth across every device ---------------- */
+const SUPABASE_URL = "https://nwvjsvnlggglywdocmwo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_SUJc3uz4i5V3ZbeNHkdvTA_wUqE9nKg";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const PHOTO_BUCKET = "photos";
+
+/* legacy on-device stores — read once so an existing closet can be migrated up */
 const KEY="menas_closet_v3";
+const SEEDED_KEY="menas_closet_v3_seeded";
+const BACKUP_KEY="menas_closet_v3_backup";
+const MIGRATED_KEY="menas_closet_migrated_to_cloud";
 const store={
   async get(k){ try{ if(window.storage){const r=await window.storage.get(k); return r&&r.value?r.value:null;} }catch(e){}
     try{ return localStorage.getItem(k); }catch(e){ return null; } },
   async set(k,v){ try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
     try{ localStorage.setItem(k,v); }catch(e){} }
 };
-/* IndexedDB: large-capacity on-device store for all photos (item photos + lookbook) */
 function idbOpen(){return new Promise((res,rej)=>{let q;try{q=indexedDB.open("closet_media",2);}catch(e){return rej(e);}
   q.onupgradeneeded=()=>{const d=q.result;
     if(!d.objectStoreNames.contains("outfits")) d.createObjectStore("outfits",{keyPath:"id",autoIncrement:true});
@@ -126,15 +104,51 @@ function idbOpen(){return new Promise((res,rej)=>{let q;try{q=indexedDB.open("cl
   q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});}
 async function idbAll(n){const db=await idbOpen();return new Promise((res,rej)=>{const o=[];const c=db.transaction(n).objectStore(n).openCursor();
   c.onsuccess=e=>{const k=e.target.result; if(k){o.push({key:k.key,value:k.value});k.continue();}else res(o);}; c.onerror=()=>rej(c.error);});}
-async function idbPut(n,v,key){const db=await idbOpen();return new Promise((res,rej)=>{const st=db.transaction(n,"readwrite").objectStore(n);
-  const r=key!==undefined?st.put(v,key):st.put(v); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
-async function idbDel(n,k){const db=await idbOpen();return new Promise((res,rej)=>{const r=db.transaction(n,"readwrite").objectStore(n).delete(k);
-  r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);});}
+
+/* row <-> app-object mapping (db uses snake_case, the app uses camelCase) */
+function rowToItem(r){
+  return { id:r.id, brand:r.brand||"", name:r.name||"", category:r.category||"Tops",
+    season:r.season||"All year", price:+r.price||0, care:+r.care||0,
+    cleanCost:+r.clean_cost||0, resale:+r.resale||0, goalCpw:+r.goal_cpw||0,
+    baseWears:+r.base_wears||0, history:Array.isArray(r.history)?r.history:[], photoPath:r.photo_path||null };
+}
+function itemToRow(it,userId){
+  return { id:it.id, user_id:userId, brand:it.brand||"", name:it.name||"", category:it.category||"Tops",
+    season:it.season||"All year", price:+it.price||0, care:+it.care||0,
+    clean_cost:+it.cleanCost||0, resale:+it.resale||0, goal_cpw:+it.goalCpw||0,
+    base_wears:+it.baseWears||0, history:it.history||[], photo_path:it.photoPath||null,
+    updated_at:new Date().toISOString() };
+}
+/* base64 data URL -> Blob, so photos upload as real files rather than giant strings */
+function dataUrlToBlob(dataUrl){
+  const [head,b64]=dataUrl.split(",");
+  const mime=(head.match(/:(.*?);/)||[])[1]||"image/jpeg";
+  const bin=atob(b64); const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+async function uploadPhoto(userId,key,dataUrl){
+  const blob=dataUrlToBlob(dataUrl);
+  const path=`${userId}/${key}-${Date.now()}.jpg`;
+  const {error}=await sb.storage.from(PHOTO_BUCKET).upload(path,blob,{contentType:"image/jpeg",upsert:true});
+  if(error) throw error;
+  return path;
+}
+async function signedUrl(path){
+  if(!path) return null;
+  const {data,error}=await sb.storage.from(PHOTO_BUCKET).createSignedUrl(path,60*60*24);
+  if(error) return null;
+  return data.signedUrl;
+}
+async function removePhoto(path){ if(path){ try{ await sb.storage.from(PHOTO_BUCKET).remove([path]); }catch(e){} } }
+
 function fileToThumb(file,max,q){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);
   img.onload=()=>{const s=Math.min(1,max/Math.max(img.width,img.height));const w=Math.round(img.width*s),h=Math.round(img.height*s);
     const cv=document.createElement("canvas");cv.width=w;cv.height=h;cv.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(u);
     try{res(cv.toDataURL("image/jpeg",q||0.82));}catch(e){rej(e);} };
   img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read that image"));}; img.src=u;});}
+function fileToImageEl(file){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);
+  img.onload=()=>{res({img,revoke:()=>URL.revokeObjectURL(u)});}; img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read that image"));}; img.src=u;});}
 
 /* ---------------- helpers ---------------- */
 const money=n=>n==null?"—":"$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
@@ -155,11 +169,42 @@ function derive(it){
   const wears=(it.baseWears||0)+it.history.length;
   const total=(+it.price||0)+(+it.care||0);
   const cpw=wears>0?total/wears:Infinity;
+  const goalCpw=(+it.goalCpw>0)?+it.goalCpw:b.mid;
+  const goalWears=Math.ceil(total/goalCpw);
+  const toGoal=Math.max(0,goalWears-wears);
+  const progress=Math.min(1,goalWears>0?wears/goalWears:0);
+  const atGoal=wears>0&&cpw<=goalCpw;
+  const unearned=Math.max(0,total-wears*goalCpw);
   const targetWears=Math.ceil(total/b.mid);
   const gap=Math.max(0,targetWears-wears);
   const reachable=targetWears<=b.ceil;
   const status=(wears>0&&cpw<=b.mid)?"star":(reachable?"improve":"sell");
-  return {...it,wears,total,cpw,targetWears,gap,reachable,status,mid:b.mid,range:b.range,ceil:b.ceil,dormant:dormancy(it)};
+  // cpw as it stood before this app started tracking dated wears (i.e. at baseWears)
+  const startCpw=(it.baseWears>0)?total/it.baseWears:null;
+  const trackedWears=it.history.length;
+  const cpwDelta=(startCpw!==null&&trackedWears>0)?startCpw-cpw:null;
+  return {...it,wears,total,cpw,goalCpw,goalWears,toGoal,progress,atGoal,unearned,
+    targetWears,gap,reachable,status,mid:b.mid,range:b.range,ceil:b.ceil,dormant:dormancy(it),
+    startCpw,trackedWears,cpwDelta};
+}
+
+/* wear activity across the whole closet, for streaks and momentum */
+function wearStats(raw){
+  const counts={};
+  raw.forEach(r=>r.history.forEach(d=>{counts[d]=(counts[d]||0)+1;}));
+  const today=todayISO();
+  const dayMs=86400000;
+  const todayCount=counts[today]||0;
+  let streak=0;
+  let cursor=new Date(today);
+  if(!counts[today]) cursor=new Date(new Date(today).getTime()-dayMs);
+  while(counts[cursor.toISOString().slice(0,10)]){ streak++; cursor=new Date(cursor.getTime()-dayMs); }
+  const since=n=>{const c=new Date(new Date(today).getTime()-n*dayMs).toISOString().slice(0,10);
+    return Object.entries(counts).filter(([d])=>d>=c).reduce((s,[,v])=>s+v,0);};
+  const last30=[];
+  for(let i=29;i>=0;i--){const d=new Date(new Date(today).getTime()-i*dayMs).toISOString().slice(0,10);
+    last30.push({d,n:counts[d]||0});}
+  return {todayCount,streak,week:since(6),month:since(29),last30,totalLogged:Object.values(counts).reduce((s,v)=>s+v,0)};
 }
 
 /* ---------------- primitives ---------------- */
@@ -187,7 +232,7 @@ function Empty({children}){return <div style={{border:"1px solid var(--line)",pa
 /* wear stepper: minus / count / plus */
 function Stepper({i,logWear}){
   return (
-    <div style={{display:"inline-flex",border:"1px solid var(--line)"}}>
+    <div style={{display:"inline-flex",border:"1px solid var(--line)"}} onClick={e=>e.stopPropagation()}>
       <button onClick={()=>logWear(i.id,-1)} disabled={i.wears<=0} title="Remove a wear"
         style={{...stepBtn,opacity:i.wears<=0?.35:1,cursor:i.wears<=0?"default":"pointer"}}>−</button>
       <span style={{...stepBtn,borderLeft:"1px solid var(--line)",borderRight:"1px solid var(--line)",cursor:"default",minWidth:26}}>{i.wears}</span>
@@ -196,14 +241,39 @@ function Stepper({i,logWear}){
   );
 }
 
-/* universal row used across Closet / Today / Underused / Rotate / Sell */
-function ItemRow({i,src,onEdit,logWear,note,trailing,flagReconsider}){
+/* countdown to an item's cost-per-wear goal */
+function GoalBar({i}){
+  if(i.atGoal) return (
+    <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7}}>
+      <div style={{flex:1,height:4,background:"var(--win)"}}/>
+      <span style={{fontSize:11,color:"var(--win)",whiteSpace:"nowrap"}}>Goal reached &middot; {money(r2(i.goalCpw))}</span>
+    </div>
+  );
+  const pct=Math.round(i.progress*100);
+  return (
+    <div style={{marginTop:7}}>
+      <div style={{height:4,background:"var(--lineSoft)",position:"relative"}}>
+        <div style={{position:"absolute",inset:0,width:`${pct}%`,background:"var(--ink)"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
+        <span style={{fontSize:11,color:"var(--ink)",whiteSpace:"nowrap"}}>
+          <b>{i.toGoal}</b> more wear{i.toGoal===1?"":"s"} to {money(r2(i.goalCpw))}
+        </span>
+        <span style={{fontSize:11,color:"var(--faint)"}}>{i.wears}/{i.goalWears}</span>
+      </div>
+    </div>
+  );
+}
+
+/* universal row: tap the photo to enlarge it, tap the text to open details */
+function ItemRow({i,src,onEdit,onExpand,logWear,note,trailing,flagReconsider,showGoal=true}){
   return (
     <div style={{display:"flex",gap:14,alignItems:"center",padding:14}}>
-      <div style={{width:58,flex:"0 0 auto",cursor:onEdit?"pointer":"default",position:"relative"}} onClick={()=>onEdit&&onEdit(i)}>
+      <div className="hoverlift" style={{width:58,flex:"0 0 auto",cursor:"zoom-in"}}
+        onClick={()=>onExpand&&onExpand({src,label:i.brand||i.name})}>
         <Thumb src={src} label={(i.brand||i.name||"?").slice(0,1)}/>
       </div>
-      <div style={{flex:1,minWidth:0}}>
+      <div style={{flex:1,minWidth:0,cursor:onEdit?"pointer":"default"}} onClick={()=>onEdit&&onEdit(i)}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</span>
           {flagReconsider && i.status==="sell" && <Tag tone="flag">Reconsider</Tag>}
@@ -213,6 +283,7 @@ function ItemRow({i,src,onEdit,logWear,note,trailing,flagReconsider}){
           {i.category} &middot; {money(i.total)} &middot; {i.wears} wear{i.wears===1?"":"s"} &middot; {lastWornLabel(i)}
         </div>
         {note && <div style={{fontSize:12,marginTop:6}}>{note}</div>}
+        {showGoal && i.status!=="sell" && <GoalBar i={i}/>}
       </div>
       <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:9}}>
         <Money v={i.cpw} size={17} tone={i.status==="sell"?"var(--flag)":undefined}/>
@@ -224,83 +295,212 @@ function ItemRow({i,src,onEdit,logWear,note,trailing,flagReconsider}){
 function RowList({children}){ return <div style={{border:"1px solid var(--line)"}}>{React.Children.map(children,(c,idx)=>
   <div style={{borderTop:idx?"1px solid var(--lineSoft)":"none"}}>{c}</div>)}</div>; }
 
+/* full-screen single-photo viewer, reused by every tab */
+function PhotoLightbox({photo,onClose}){
+  if(!photo) return null;
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.9)",zIndex:80,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:"6vh 16px"}}>
+      <button onClick={onClose} style={{position:"absolute",top:18,right:22,fontSize:26,color:"#fff",lineHeight:1}}>×</button>
+      {photo.label && <div style={{position:"absolute",top:22,left:22,fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"#fff"}}>{photo.label}</div>}
+      {photo.src
+        ? <img onClick={e=>e.stopPropagation()} src={photo.src} alt="" style={{maxWidth:"100%",maxHeight:"84vh",objectFit:"contain",display:"block"}}/>
+        : <div style={{color:"#fff",fontFamily:display,fontSize:20}}>No photo yet</div>}
+    </div>
+  );
+}
+
 /* ---------------- app ---------------- */
 function App(){
+  const [session,setSession]=useState(undefined); // undefined = still checking
   const [tab,setTab]=useState("closet");
   const [raw,setRaw]=useState(null);
-  const [itemImgs,setItemImgs]=useState({});
+  const [itemImgs,setItemImgs]=useState({});   // id -> signed display URL
   const [outfits,setOutfits]=useState([]);
   const [editing,setEditing]=useState(null);
+  const [expanded,setExpanded]=useState(null);
   const [toast,setToast]=useState("");
+  const [syncing,setSyncing]=useState(false);
+  const [migrateOffer,setMigrateOffer]=useState(null); // {count} when a local closet is found
 
-  function flash(m){ setToast(m); setTimeout(()=>setToast(""),2200); }
+  function flash(m){ setToast(m); setTimeout(()=>setToast(""),2600); }
 
-  useEffect(()=>{(async()=>{
-    const s=await store.get(KEY);
-    let list = s ? (()=>{ try{ return JSON.parse(s); }catch(e){ return SEED; } })() : SEED;
+  /* ---- auth ---- */
+  useEffect(()=>{
+    sb.auth.getSession().then(({data})=>setSession(data.session||null));
+    const {data:sub}=sb.auth.onAuthStateChange((_e,s)=>setSession(s));
+    return ()=>{ sub.subscription.unsubscribe(); };
+  },[]);
 
-    // one-time migration: move any photo previously embedded in the saved JSON
-    // (which silently stopped saving once it hit the browser's localStorage limit)
-    // into IndexedDB, which has far more room.
-    let imgMap={};
-    try{ (await idbAll("itemImgs")).forEach(x=>{ imgMap[x.key]=x.value; }); }catch(e){}
-    let migratedCount=0;
-    for(const it of list){
-      if(it.img){
-        try{ await idbPut("itemImgs", it.img, it.id); imgMap[it.id]=it.img; migratedCount++; }catch(e){}
-        delete it.img;
+  const userId=session?.user?.id||null;
+
+  /* ---- load everything for this account ---- */
+  async function loadAll(uid){
+    setSyncing(true);
+    try{
+      const {data:rows,error}=await sb.from("items").select("*").eq("user_id",uid);
+      if(error) throw error;
+      const list=(rows||[]).map(rowToItem);
+      setRaw(list);
+      const urls={};
+      await Promise.all(list.filter(i=>i.photoPath).map(async i=>{ urls[i.id]=await signedUrl(i.photoPath); }));
+      setItemImgs(urls);
+
+      const {data:ofs}=await sb.from("outfits").select("*").eq("user_id",uid).order("created_at",{ascending:false});
+      const withUrls=await Promise.all((ofs||[]).map(async o=>({id:o.id,path:o.photo_path,src:await signedUrl(o.photo_path)})));
+      setOutfits(withUrls);
+
+      // first time on this account: is there a closet sitting in this browser to bring up?
+      if(list.length===0){
+        const already=await store.get(MIGRATED_KEY);
+        if(!already){
+          const primary=await store.get(KEY);
+          if(primary){
+            try{ const parsed=JSON.parse(primary);
+              if(Array.isArray(parsed)&&parsed.length) setMigrateOffer({count:parsed.length});
+            }catch(e){}
+          }
+        }
       }
-    }
-    setRaw(list);
-    setItemImgs(imgMap);
-    if(migratedCount>0){ store.set(KEY,JSON.stringify(list)); flash(`Moved ${migratedCount} photo${migratedCount===1?"":"s"} to on-device storage`); }
+    }catch(e){ flash("Could not reach your closet. Check your connection."); }
+    setSyncing(false);
+  }
+  useEffect(()=>{ if(userId) loadAll(userId); },[userId]);
 
-    try{ setOutfits((await idbAll("outfits")).map(x=>x.value).sort((a,b)=>b.ts-a.ts)); }catch(e){}
-  })();},[]);
-  useEffect(()=>{ if(raw) store.set(KEY,JSON.stringify(raw)); },[raw]);
+  /* ---- one-time migration: local browser -> cloud ---- */
+  async function runMigration(){
+    setMigrateOffer(null); setSyncing(true);
+    try{
+      const primary=await store.get(KEY);
+      const list=JSON.parse(primary);
+      let imgMap={};
+      try{ (await idbAll("itemImgs")).forEach(x=>{ imgMap[x.key]=x.value; }); }catch(e){}
+
+      const taken=new Set(list.map(x=>x.id).filter(id=>typeof id==="string"));
+      const rows=[];
+      for(const it of list){
+        if(typeof it.id!=="string") it.id=uniqueId(slugify(`${it.brand}-${it.name}`),taken);
+        if(!CATS.includes(it.category)) it.category=reassignCategory(it.category,it.name);
+        let photoPath=null;
+        const dataUrl=it.img||imgMap[it.id];
+        if(dataUrl && String(dataUrl).startsWith("data:")){
+          try{ photoPath=await uploadPhoto(userId,it.id,dataUrl); }catch(e){}
+        }
+        rows.push(itemToRow({...it,photoPath},userId));
+      }
+      const {error}=await sb.from("items").upsert(rows,{onConflict:"user_id,id"});
+      if(error) throw error;
+
+      // lookbook photos
+      try{
+        const locals=(await idbAll("outfits")).map(x=>x.value).filter(o=>o&&o.src);
+        for(const o of locals){
+          try{
+            const path=await uploadPhoto(userId,`outfit-${o.ts||Date.now()}`,o.src);
+            await sb.from("outfits").insert({user_id:userId,photo_path:path});
+          }catch(e){}
+        }
+      }catch(e){}
+
+      await store.set(MIGRATED_KEY,"1");
+      await loadAll(userId);
+      flash("Your closet is now synced across every device");
+    }catch(e){ flash("Migration hit a snag. Your local copy is untouched."); setSyncing(false); }
+  }
+  async function skipMigration(){ await store.set(MIGRATED_KEY,"1"); setMigrateOffer(null); }
 
   const items=useMemo(()=>raw?raw.map(derive):[],[raw]);
 
+  /* ---- writes: optimistic locally, then persisted to the cloud ---- */
+  async function persist(item){
+    try{
+      const {error}=await sb.from("items").upsert(itemToRow(item,userId),{onConflict:"user_id,id"});
+      if(error) throw error;
+    }catch(e){ flash("Change didn't save. Check your connection."); }
+  }
+
   function logWear(id,delta=1){
-    setRaw(rs=>rs.map(r=>{
-      if(r.id!==id) return r;
-      if(delta>0) return {...r,history:[...r.history,todayISO()]};
-      if(r.history.length) return {...r,history:r.history.slice(0,-1)};
-      return {...r,baseWears:Math.max(0,(r.baseWears||0)-1)};
-    }));
+    const before=raw.find(r=>r.id===id);
+    if(!before) return;
+    const after = delta>0
+      ? {...before,history:[...before.history,todayISO()]}
+      : (before.history.length ? {...before,history:before.history.slice(0,-1)}
+                               : {...before,baseWears:Math.max(0,(before.baseWears||0)-1)});
+    setRaw(rs=>rs.map(r=>r.id===id?after:r));
+    persist(after);
+    if(delta>0){
+      const a=derive(before), b=derive(after);
+      const label=before.brand||before.name;
+      const saved=a.cpw===Infinity?null:a.cpw-b.cpw;
+      if(!a.atGoal && b.atGoal) flash(`${label} hit its goal of ${money(r2(b.goalCpw))} per wear`);
+      else if(a.wears===0) flash(`First wear logged. ${label} is now ${money(r2(b.cpw))} per wear`);
+      else if(b.toGoal===1) flash(`One more wear and ${label} reaches ${money(r2(b.goalCpw))}`);
+      else if(saved!==null && saved>=1) flash(`${label} down ${money(r2(saved))} to ${money(r2(b.cpw))} per wear`);
+      else flash(`${label} now ${money(r2(b.cpw))} per wear`);
+    }
   }
   function logClean(id){
-    setRaw(rs=>rs.map(r=>r.id===id?{...r,care:(+r.care||0)+(+r.cleanCost||0)}:r));
-    flash("Cleaning cost added");
+    const before=raw.find(r=>r.id===id); if(!before) return;
+    const after={...before,care:(+before.care||0)+(+before.cleanCost||0)};
+    setRaw(rs=>rs.map(r=>r.id===id?after:r));
+    persist(after); flash("Cleaning cost added");
   }
   async function saveItem(v){
     const { img, ...rest } = v;
-    let newId=null;
-    const id = rest.id;
-    setRaw(rs=>{
-      if(id==null){ newId = rs.reduce((m,r)=>Math.max(m,r.id),-1)+1;
-        return [...rs,{...rest,id:newId,history:[],baseWears:+rest.baseWears||0}]; }
-      return rs.map(r=>r.id===id?{...r,...rest}:r);
-    });
-    const finalId = id==null ? newId : id;
+    const taken=new Set(raw.map(r=>r.id));
+    const isNew = rest.id==null;
+    const finalId = isNew ? uniqueId(slugify(`${rest.brand}-${rest.name}`),taken) : rest.id;
+    const existing = raw.find(r=>r.id===finalId);
+    let photoPath = existing?existing.photoPath:null;
+
     if(img!==undefined){
       try{
-        if(img){ await idbPut("itemImgs",img,finalId); setItemImgs(m=>({...m,[finalId]:img})); }
-        else { await idbDel("itemImgs",finalId); setItemImgs(m=>{const n={...m}; delete n[finalId]; return n;}); }
-      }catch(e){ flash("Saved the piece, but the photo didn't save"); }
+        if(img && String(img).startsWith("data:")){
+          if(photoPath) await removePhoto(photoPath);
+          photoPath = await uploadPhoto(userId,finalId,img);
+        } else if(!img){
+          if(photoPath) await removePhoto(photoPath);
+          photoPath = null;
+        }
+      }catch(e){ flash("Saved the piece, but the photo didn't upload"); }
     }
-    setEditing(null); flash(id==null?"Piece added":"Piece updated");
+    const item = isNew
+      ? {...rest,id:finalId,history:[],baseWears:+rest.baseWears||0,photoPath}
+      : {...existing,...rest,id:finalId,photoPath};
+
+    setRaw(rs=> isNew ? [...rs,item] : rs.map(r=>r.id===finalId?item:r));
+    await persist(item);
+    const url = photoPath ? await signedUrl(photoPath) : null;
+    setItemImgs(m=>{ const n={...m}; if(url) n[finalId]=url; else delete n[finalId]; return n; });
+    setEditing(null); flash(isNew?"Piece added":"Piece updated");
   }
   async function deleteItem(id){
+    const it=raw.find(r=>r.id===id);
     setRaw(rs=>rs.filter(r=>r.id!==id));
-    try{ await idbDel("itemImgs",id); }catch(e){}
     setItemImgs(m=>{const n={...m}; delete n[id]; return n;});
-    setEditing(null); flash("Piece removed");
+    setEditing(null);
+    try{
+      if(it&&it.photoPath) await removePhoto(it.photoPath);
+      await sb.from("items").delete().eq("user_id",userId).eq("id",id);
+      flash("Piece removed");
+    }catch(e){ flash("Couldn't remove that piece"); }
   }
 
-  async function addOutfit(f){ try{ const src=await fileToThumb(f,1100,.82); const rec={src,ts:Date.now()};
-    const id=await idbPut("outfits",rec); setOutfits(o=>[{...rec,id},...o]); }catch(e){ flash("Could not save that photo"); } }
-  async function delOutfit(id){ try{ await idbDel("outfits",id); setOutfits(o=>o.filter(x=>x.id!==id)); }catch(e){} }
+  async function addOutfit(f){
+    try{
+      const src=await fileToThumb(f,1100,.82);
+      const path=await uploadPhoto(userId,`outfit-${Date.now()}`,src);
+      const {data,error}=await sb.from("outfits").insert({user_id:userId,photo_path:path}).select().single();
+      if(error) throw error;
+      const url=await signedUrl(path);
+      setOutfits(o=>[{id:data.id,path,src:url},...o]);
+    }catch(e){ flash("Could not save that photo"); }
+  }
+  async function delOutfit(id){
+    const o=outfits.find(x=>x.id===id);
+    setOutfits(os=>os.filter(x=>x.id!==id));
+    try{ if(o&&o.path) await removePhoto(o.path); await sb.from("outfits").delete().eq("id",id); }catch(e){}
+  }
 
   function exportJSON(){
     const blob=new Blob([JSON.stringify(raw,null,2)],{type:"application/json"});
@@ -309,28 +509,54 @@ function App(){
   }
   function importJSON(file){
     const fr=new FileReader();
-    fr.onload=()=>{ try{ const d=JSON.parse(fr.result);
-      if(Array.isArray(d)){ setRaw(d.map(x=>({history:[],baseWears:0,resale:0,cleanCost:0,season:"All year",...x}))); flash("Closet restored"); } }
-      catch(e){ flash("Could not read that file"); } };
+    fr.onload=async()=>{ try{ const d=JSON.parse(fr.result);
+      if(!Array.isArray(d)) return;
+      const taken=new Set();
+      const rows=d.map(x=>{
+        const base={history:[],baseWears:0,resale:0,cleanCost:0,goalCpw:0,season:"All year",...x};
+        if(typeof base.id!=="string") base.id=uniqueId(slugify(`${base.brand}-${base.name}`),taken); else taken.add(base.id);
+        if(!CATS.includes(base.category)) base.category=reassignCategory(base.category,base.name);
+        return itemToRow(base,userId);
+      });
+      const {error}=await sb.from("items").upsert(rows,{onConflict:"user_id,id"});
+      if(error) throw error;
+      await loadAll(userId); flash("Closet restored");
+    } catch(e){ flash("Could not read that file"); } };
     fr.readAsText(file);
   }
 
+  const ws=useMemo(()=>raw?wearStats(raw):{streak:0,week:0,month:0,last30:[],todayCount:0,totalLogged:0},[raw]);
   const stats=useMemo(()=>{
     const spend=items.reduce((s,i)=>s+i.total,0);
     const worn=items.filter(i=>i.wears>0);
     const avg=worn.length?worn.reduce((s,i)=>s+i.cpw,0)/worn.length:0;
-    return {spend,avg,never:items.filter(i=>i.wears===0).length,count:items.length};
+    return {spend,avg,never:items.filter(i=>i.wears===0).length,count:items.length,
+      atGoal:items.filter(i=>i.atGoal).length};
   },[items]);
 
-  if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
+  if(session===undefined) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
+  if(!session) return <AuthScreen flash={flash} toast={toast}/>;
+  if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Loading your closet…</div>;
 
-  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
+  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["atgoal","At goal"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
 
   return (
     <div>
-      <div style={{borderBottom:"1px solid var(--line)",textAlign:"center",padding:"26px 20px 0"}}>
+      {migrateOffer && (
+        <div style={{background:"var(--ink)",color:"#fff",padding:"14px 20px",fontSize:12.5,lineHeight:1.6,textAlign:"center"}}>
+          Found {migrateOffer.count} pieces saved in this browser. Bring them into your account so they sync everywhere?
+          <div style={{marginTop:9,display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+            <button onClick={runMigration} style={{fontSize:11.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink)",background:"#fff",padding:"8px 14px"}}>Bring them in</button>
+            <button onClick={skipMigration} style={{fontSize:11.5,letterSpacing:".1em",textTransform:"uppercase",color:"#fff",border:"1px solid #fff",padding:"8px 14px"}}>Not now</button>
+          </div>
+        </div>
+      )}
+      <div style={{borderBottom:"1px solid var(--line)",textAlign:"center",padding:"26px 20px 0",position:"relative"}}>
         <div style={{fontFamily:display,fontSize:34,fontWeight:400,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
-        <div className="lbl" style={{marginTop:9}}>Cost per wear &middot; {stats.count} pieces</div>
+        <div className="lbl" style={{marginTop:9}}>
+          Cost per wear &middot; {stats.count} pieces {syncing && <span style={{marginLeft:6}}>&middot; syncing…</span>}
+        </div>
+        <button onClick={()=>sb.auth.signOut()} style={{position:"absolute",right:18,top:22,fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--faint)"}}>Sign out</button>
         <div style={{display:"flex",justifyContent:"center",gap:0,flexWrap:"wrap",marginTop:20}}>
           {TABS.map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)} className="hoverlift" style={{
@@ -343,7 +569,10 @@ function App(){
 
       <div style={{maxWidth:1180,margin:"0 auto",padding:"30px 22px 90px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",borderTop:"1px solid var(--line)",borderBottom:"1px solid var(--line)",marginBottom:34}}>
-          {[["Invested",money(stats.spend)],["Average CPW",money(r2(stats.avg))],["Never worn",stats.never],["Season",seasonNow()]].map(([l,v],i)=>(
+          {[["Invested",money(stats.spend)],["Average CPW",money(r2(stats.avg))],
+            ["At goal",`${stats.atGoal}/${stats.count}`],
+            ["Worn this week",ws.week],
+            ["Streak",ws.streak>0?`${ws.streak} day${ws.streak===1?"":"s"}`:"—"]].map(([l,v],i)=>(
             <div key={l} style={{padding:"16px 18px",borderLeft:i?"1px solid var(--lineSoft)":"none"}}>
               <div className="lbl">{l}</div>
               <div style={{fontFamily:display,fontSize:25,marginTop:4}}>{v}</div>
@@ -351,26 +580,97 @@ function App(){
           ))}
         </div>
 
-        {tab==="closet" && <Closet items={items} itemImgs={itemImgs} onEdit={setEditing} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
-        {tab==="today" && <Today items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
-        {tab==="underused" && <Underused items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
-        {tab==="rotate" && <Rotate items={items} itemImgs={itemImgs} logWear={logWear}/>}
-        {tab==="sell" && <Sell items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing}/>}
-        {tab==="insights" && <Insights items={items}/>}
+        {items.length===0 && !migrateOffer && (
+          <div style={{border:"1px solid var(--line)",padding:"44px 20px",textAlign:"center",marginBottom:30}}>
+            <div style={{fontFamily:display,fontSize:22}}>Your closet is empty</div>
+            <div style={{fontSize:13.5,color:"var(--mut)",marginTop:8,lineHeight:1.6}}>
+              Add your first piece with <b>+ Add</b> above, or import a backup from the Closet tab.
+            </div>
+          </div>
+        )}
+
+        {tab==="closet" && <Closet items={items} itemImgs={itemImgs} onEdit={setEditing} onExpand={setExpanded} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
+        {tab==="today" && <Today items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
+        {tab==="underused" && <Underused items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
+        {tab==="rotate" && <Rotate items={items} itemImgs={itemImgs} logWear={logWear} onExpand={setExpanded}/>}
+        {tab==="atgoal" && <AtGoal items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
+        {tab==="sell" && <Sell items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
+        {tab==="insights" && <Insights items={items} ws={ws}/>}
         {tab==="lookbook" && <Lookbook outfits={outfits} addOutfit={addOutfit} delOutfit={delOutfit}/>}
       </div>
 
       {editing && <ItemForm value={editing} src={editing.id!=null?itemImgs[editing.id]:null} onSave={saveItem} onCancel={()=>setEditing(null)} onDelete={deleteItem} logClean={logClean}/>}
+      {expanded && <PhotoLightbox photo={expanded} onClose={()=>setExpanded(null)}/>}
       {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,letterSpacing:".04em",padding:"11px 20px",zIndex:60,maxWidth:"88vw",textAlign:"center"}}>{toast}</div>}
     </div>
   );
 }
 
+/* ---------------- sign in ---------------- */
+function AuthScreen({flash,toast}){
+  const [mode,setMode]=useState("signin");
+  const [email,setEmail]=useState("");
+  const [pw,setPw]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+
+  async function submit(){
+    setErr(""); setBusy(true);
+    try{
+      const fn = mode==="signin" ? sb.auth.signInWithPassword : sb.auth.signUp;
+      const {error}=await fn.call(sb.auth,{email:email.trim(),password:pw});
+      if(error) setErr(error.message);
+    }catch(e){ setErr("Something went wrong. Try again."); }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"6vh 20px"}}>
+      <div style={{width:"100%",maxWidth:360,textAlign:"center"}}>
+        <div style={{fontFamily:display,fontSize:30,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
+        <div className="lbl" style={{marginTop:10,marginBottom:28}}>
+          {mode==="signin"?"Sign in to your closet":"Create your account"}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,textAlign:"left"}}>
+          <Field label="Email">
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" style={inp}/>
+          </Field>
+          <Field label="Password">
+            <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter")submit();}}
+              autoComplete={mode==="signin"?"current-password":"new-password"} style={inp}/>
+          </Field>
+        </div>
+        {err && <div style={{fontSize:12,color:"var(--flag)",marginTop:12,textAlign:"left",lineHeight:1.5}}>{err}</div>}
+        <button onClick={submit} disabled={busy||!email||!pw} style={{...solid,width:"100%",marginTop:18,opacity:(busy||!email||!pw)?.5:1}}>
+          {busy?"One moment…":(mode==="signin"?"Sign in":"Create account")}
+        </button>
+        <button onClick={()=>{setMode(mode==="signin"?"signup":"signin");setErr("");}}
+          style={{fontSize:12,color:"var(--mut)",marginTop:16}}>
+          {mode==="signin"?"No account yet? Create one":"Already have an account? Sign in"}
+        </button>
+        <div style={{fontSize:11.5,color:"var(--faint)",marginTop:26,lineHeight:1.6}}>
+          Your closet syncs to every device you sign in on.
+        </div>
+      </div>
+      {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,padding:"11px 20px"}}>{toast}</div>}
+    </div>
+  );
+}
+function ImportButton({onImport,label,light}){
+  const ref=useRef();
+  return (
+    <>
+      <input ref={ref} type="file" accept="application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])onImport(e.target.files[0]);e.target.value="";}}/>
+      <button onClick={()=>ref.current.click()} style={light?{fontSize:11.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink)",background:"#fff",padding:"8px 14px"}:ghost}>{label}</button>
+    </>
+  );
+}
+
 /* ---------------- closet ---------------- */
-function Closet({items,itemImgs,onEdit,logWear,exportJSON,importJSON}){
+function Closet({items,itemImgs,onEdit,onExpand,logWear,exportJSON,importJSON}){
   const [cat,setCat]=useState("All");
   const [sort,setSort]=useState("cpw");
-  const fileRef=useRef();
   const cats=["All",...CATS.filter(c=>items.some(i=>i.category===c))];
   let list=items.filter(i=>cat==="All"||i.category===cat);
   list=[...list].sort((a,b)=>
@@ -380,7 +680,7 @@ function Closet({items,itemImgs,onEdit,logWear,exportJSON,importJSON}){
     : a.wears-b.wears);
   return (
     <div>
-      <Lead>Everything you own, with what each piece actually costs you per wear. Tap the photo to edit, or use the stepper to log or undo a wear.</Lead>
+      <Lead>Everything you own, with what each piece actually costs you per wear. Tap the photo to see it larger, tap the details to edit.</Lead>
       <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"center",marginBottom:22}}>
         <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
           {cats.map(c=>(
@@ -400,22 +700,21 @@ function Closet({items,itemImgs,onEdit,logWear,exportJSON,importJSON}){
       </div>
 
       <RowList>
-        {list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear} flagReconsider/>)}
+        {list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear} flagReconsider/>)}
       </RowList>
 
       <div style={{marginTop:36,paddingTop:22,borderTop:"1px solid var(--line)",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
         <span className="lbl">Backup</span>
         <button onClick={exportJSON} style={ghost}>Export closet</button>
-        <input ref={fileRef} type="file" accept="application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";}}/>
-        <button onClick={()=>fileRef.current.click()} style={ghost}>Import backup</button>
-        <span style={{fontSize:12,color:"var(--faint)"}}>Your closet lives in this browser. Export now and then so you keep a copy.</span>
+        <ImportButton onImport={importJSON} label="Import backup"/>
+        <span style={{fontSize:12,color:"var(--faint)"}}>Your closet lives in this browser, with an automatic backup kept alongside it. Export now and then to keep a copy of your own.</span>
       </div>
     </div>
   );
 }
 
 /* ---------------- get dressed ---------------- */
-function Today({items,itemImgs,logWear,onEdit}){
+function Today({items,itemImgs,logWear,onEdit,onExpand}){
   const cats=CATS.filter(c=>items.some(i=>i.category===c));
   return (
     <div>
@@ -426,7 +725,7 @@ function Today({items,itemImgs,logWear,onEdit}){
         return (
           <div key={c} style={{marginBottom:36}}>
             <SectionRule right={`${list.length} shown`}>{c}</SectionRule>
-            <RowList>{list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}/>)}</RowList>
+            <RowList>{list.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear}/>)}</RowList>
           </div>
         );
       })}
@@ -435,7 +734,7 @@ function Today({items,itemImgs,logWear,onEdit}){
 }
 
 /* ---------------- underused ---------------- */
-function Underused({items,itemImgs,logWear,onEdit}){
+function Underused({items,itemImgs,logWear,onEdit,onExpand}){
   const under=items.filter(i=>i.status==="improve").sort((a,b)=>b.gap-a.gap);
   const proven=items.filter(i=>i.status==="star").sort((a,b)=>b.wears-a.wears);
   return (
@@ -445,21 +744,38 @@ function Underused({items,itemImgs,logWear,onEdit}){
       <div style={{marginBottom:44}}>
         <RowList>
           {under.map(i=>(
-            <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}
+            <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear}
               note={`+${i.gap} wear${i.gap===1?"":"s"} reaches ${money(r2(i.total/i.targetWears))} · benchmark ${i.range}`}/>
           ))}
         </RowList>
       </div>
       <SectionRule right={`${proven.length} pieces`}>Already earning their keep</SectionRule>
       <RowList>
-        {proven.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}/>)}
+        {proven.map(i=><ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear}/>)}
       </RowList>
     </div>
   );
 }
 
+/* ---------------- at goal ---------------- */
+function AtGoal({items,itemImgs,logWear,onEdit,onExpand}){
+  const list=[...items].filter(i=>i.atGoal).sort((a,b)=>(b.goalCpw-b.cpw)-(a.goalCpw-a.cpw));
+  return (
+    <div>
+      <Lead>Pieces that have already earned back their cost, wear for wear. The margin below shows how far under goal each one has landed &mdash; marked in red wherever you see it across the app.</Lead>
+      {list.length===0 ? <Empty>Nothing&rsquo;s reached its goal yet. Keep wearing &mdash; the first one is closer than you think.</Empty> :
+      <RowList>
+        {list.map(i=>(
+          <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear}
+            note={<span style={{color:"var(--win)"}}>{money(r2(i.goalCpw-i.cpw))} under its {money(r2(i.goalCpw))} goal</span>}/>
+        ))}
+      </RowList>}
+    </div>
+  );
+}
+
 /* ---------------- rotate in ---------------- */
-function Rotate({items,itemImgs,logWear}){
+function Rotate({items,itemImgs,logWear,onExpand}){
   const byCat={}; items.forEach(i=>{(byCat[i.category]=byCat[i.category]||[]).push(i);});
   const blocks=[];
   CATS.forEach(cat=>{
@@ -480,7 +796,7 @@ function Rotate({items,itemImgs,logWear}){
             {b.cands.map(c=>{
               const proj=c.total/(c.wears+Math.max(1,target-c.wears));
               return (
-                <ItemRow key={c.id} i={c} src={itemImgs[c.id]} logWear={logWear}
+                <ItemRow key={c.id} i={c} src={itemImgs[c.id]} onExpand={onExpand} logWear={logWear}
                   note={<span>now <b>{money(r2(c.cpw))}</b> &rarr; <span style={{color:"var(--good)"}}>{money(r2(proj))}</span> at {Math.max(c.wears+1,target)} wears</span>}/>
               );
             })}
@@ -492,7 +808,7 @@ function Rotate({items,itemImgs,logWear}){
 }
 
 /* ---------------- sell ---------------- */
-function Sell({items,itemImgs,logWear,onEdit}){
+function Sell({items,itemImgs,logWear,onEdit,onExpand}){
   const list=items.filter(i=>i.status==="sell").sort((a,b)=>b.cpw-a.cpw);
   const recover=list.reduce((s,i)=>s+(+i.resale||0),0);
   return (
@@ -504,12 +820,12 @@ function Sell({items,itemImgs,logWear,onEdit}){
       {list.length===0 ? <Empty>Nothing flagged. Every piece can still reach its benchmark.</Empty> :
       <RowList>
         {list.map(i=>(
-          <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} logWear={logWear}
+          <ItemRow key={i.id} i={i} src={itemImgs[i.id]} onEdit={onEdit} onExpand={onExpand} logWear={logWear}
             note={`needs ~${i.targetWears} wears, realistic ceiling ${i.ceil}`}
             trailing={<div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
               {+i.resale>0
                 ? <span style={{fontSize:11.5,color:"var(--good)"}}>{money(+i.resale)} resale</span>
-                : <button onClick={()=>onEdit(i)} style={{...mini,fontSize:11}}>Add resale</button>}
+                : <button onClick={e=>{e.stopPropagation();onEdit(i);}} style={{...mini,fontSize:11}}>Add resale</button>}
               <Stepper i={i} logWear={logWear}/>
             </div>}/>
         ))}
@@ -519,43 +835,145 @@ function Sell({items,itemImgs,logWear,onEdit}){
 }
 
 /* ---------------- insights ---------------- */
-function Insights({items}){
-  const cats = CATS.filter(c=>items.some(i=>i.category===c));
-  const catStats = cats.map(c=>{
-    const list=items.filter(i=>i.category===c);
-    const spend=list.reduce((s,i)=>s+i.total,0);
-    const worn=list.filter(i=>i.wears>0);
-    const avg=worn.length?worn.reduce((s,i)=>s+i.cpw,0)/worn.length:null;
-    const b=BENCH[c];
-    return {cat:c,count:list.length,spend,avg,ratio:avg?avg/b.mid:null,range:b.range};
-  }).sort((a,b)=>b.spend-a.spend);
-  const maxSpend=Math.max(1,...catStats.map(c=>c.spend));
-
-  const onTarget=items.filter(i=>i.status==="star").length;
-  const improve=items.filter(i=>i.status==="improve").length;
-  const flagged=items.filter(i=>i.status==="sell").length;
+function Insights({items,ws}){
+  const worn=items.filter(i=>i.wears>0);
+  const spend=items.reduce((s,i)=>s+i.total,0);
+  const unearned=items.reduce((s,i)=>s+i.unearned,0);
+  const earned=Math.max(0,spend-unearned);
+  const earnedPct=spend>0?Math.round((earned/spend)*100):0;
+  const atGoal=items.filter(i=>i.atGoal).length;
   const neverWorn=items.filter(i=>i.wears===0);
-  const mostWorn=[...items].sort((a,b)=>b.wears-a.wears).slice(0,5);
+  const maxDay=Math.max(1,...ws.last30.map(d=>d.n));
+
+  const cats=CATS.filter(c=>items.some(i=>i.category===c));
+  const catStats=cats.map(c=>{
+    const list=items.filter(i=>i.category===c);
+    const cSpend=list.reduce((s,i)=>s+i.total,0);
+    const cUnearned=list.reduce((s,i)=>s+i.unearned,0);
+    const w=list.filter(i=>i.wears>0);
+    const avg=w.length?w.reduce((s,i)=>s+i.cpw,0)/w.length:null;
+    return {cat:c,count:list.length,spend:cSpend,unearned:cUnearned,
+      earnedPct:cSpend>0?Math.round(((cSpend-cUnearned)/cSpend)*100):0,avg,range:BENCH[c].range,mid:BENCH[c].mid};
+  }).sort((a,b)=>b.unearned-a.unearned);
+
+  const biggestOpportunity=[...items].filter(i=>!i.atGoal&&i.status!=="sell").sort((a,b)=>b.unearned-a.unearned).slice(0,5);
+  const bestValue=[...worn].sort((a,b)=>a.cpw-b.cpw).slice(0,5);
+  const closestToGoal=[...items].filter(i=>!i.atGoal&&i.toGoal>0&&i.status!=="sell").sort((a,b)=>a.toGoal-b.toGoal).slice(0,5);
   const longestDormant=[...items].filter(i=>i.dormant!==null).sort((a,b)=>b.dormant-a.dormant).slice(0,5);
-  const highestCpw=[...items].filter(i=>i.cpw!==Infinity).sort((a,b)=>b.cpw-a.cpw).slice(0,5);
-  const potentialRecovery=items.filter(i=>i.status==="sell").reduce((s,i)=>s+(+i.resale||0),0);
+
+  // change in cost-per-wear since tracking started (only meaningful once a piece had
+  // a starting wear count AND has logged at least one dated wear since)
+  const tracked=items.filter(i=>i.cpwDelta!==null);
+  const avgDelta=tracked.length?tracked.reduce((s,i)=>s+i.cpwDelta,0)/tracked.length:null;
+  const biggestMovers=[...tracked].sort((a,b)=>b.cpwDelta-a.cpwDelta).slice(0,5);
+
+  const projection=(()=>{
+    if(!biggestOpportunity.length) return null;
+    const added=13;
+    const after=biggestOpportunity.reduce((s,i)=>{
+      const w=i.wears+added, t=i.total;
+      return s+Math.max(0,t-w*i.goalCpw);
+    },0);
+    const now=biggestOpportunity.reduce((s,i)=>s+i.unearned,0);
+    return {now,after,freed:Math.max(0,now-after)};
+  })();
 
   return (
     <div>
-      <Lead>A read on where your money and wear actually go.</Lead>
+      <Lead>Where your money and your wear actually go. The core idea: every piece has a goal cost per wear, and wearing it &ldquo;earns off&rdquo; part of what you paid.</Lead>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",border:"1px solid var(--line)",marginBottom:40}}>
-        {[["On target",onTarget],["Worth pushing",improve],["Flagged",flagged],["Never worn",neverWorn.length]].map(([l,v],idx)=>(
+      <div style={{border:"1px solid var(--line)",padding:"20px 20px 22px",marginBottom:34}}>
+        <div className="lbl">Cost earned off so far</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:12,marginTop:6,flexWrap:"wrap"}}>
+          <span style={{fontFamily:display,fontSize:34}}>{money(r2(earned))}</span>
+          <span style={{fontSize:13,color:"var(--mut)"}}>of {money(spend)} invested &middot; {earnedPct}%</span>
+        </div>
+        <div style={{height:8,background:"var(--lineSoft)",marginTop:14,position:"relative"}}>
+          <div style={{position:"absolute",inset:0,width:`${earnedPct}%`,background:"var(--ink)"}}/>
+        </div>
+        <div style={{fontSize:12,color:"var(--faint)",marginTop:8}}>
+          {money(r2(unearned))} still to earn off by wearing what you own.
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",border:"1px solid var(--line)",marginBottom:34}}>
+        {[["At goal",`${atGoal}/${items.length}`,"pieces"],
+          ["Worn this month",ws.month,"wears logged"],
+          ["Current streak",ws.streak,ws.streak===1?"day":"days"],
+          ["Never worn",neverWorn.length,"pieces"]].map(([l,v,sub],idx)=>(
           <div key={l} style={{padding:"16px 18px",borderLeft:idx?"1px solid var(--lineSoft)":"none"}}>
             <div className="lbl">{l}</div>
             <div style={{fontFamily:display,fontSize:26,marginTop:4}}>{v}</div>
-            <div style={{fontSize:11,color:"var(--faint)",marginTop:2}}>of {items.length} pieces</div>
+            <div style={{fontSize:11,color:"var(--faint)",marginTop:2}}>{sub}</div>
           </div>
         ))}
       </div>
 
-      <SectionRule right="spend & average cost per wear">Category breakdown</SectionRule>
-      <div style={{border:"1px solid var(--line)",marginBottom:40}}>
+      <SectionRule right={`${ws.month} wears`}>Last 30 days</SectionRule>
+      <div style={{border:"1px solid var(--line)",padding:"18px 16px",marginBottom:34}}>
+        {ws.totalLogged===0
+          ? <div style={{fontSize:13,color:"var(--faint)",textAlign:"center",padding:"14px 0"}}>
+              Nothing logged yet. Every wear you log from here on fills this in.</div>
+          : <div style={{display:"flex",alignItems:"flex-end",gap:2,height:70}}>
+              {ws.last30.map(d=>(
+                <div key={d.d} title={`${d.d}: ${d.n}`} style={{flex:1,background:d.n?"var(--ink)":"var(--lineSoft)",
+                  height:d.n?`${Math.max(8,(d.n/maxDay)*100)}%`:"3px"}}/>
+              ))}
+            </div>}
+      </div>
+
+      <SectionRule right={tracked.length?`${tracked.length} pieces tracked`:undefined}>Change since you started tracking</SectionRule>
+      <div style={{border:"1px solid var(--line)",padding:"18px 16px",marginBottom:12}}>
+        {tracked.length===0
+          ? <div style={{fontSize:13,color:"var(--faint)",lineHeight:1.6}}>
+              This compares each piece&rsquo;s cost per wear before you started logging dated wears against where it stands now. Log a few wears on pieces that already had a starting wear count, and the movement shows up here.</div>
+          : <div>
+              <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontFamily:display,fontSize:28,color:avgDelta>=0?"var(--good)":"var(--flag)"}}>
+                  {avgDelta>=0?"−":"+"}{money(r2(Math.abs(avgDelta)))}
+                </span>
+                <span style={{fontSize:12.5,color:"var(--mut)"}}>average change in cost per wear across tracked pieces</span>
+              </div>
+            </div>}
+      </div>
+      {biggestMovers.length>0 &&
+        <div style={{border:"1px solid var(--line)",marginBottom:34}}>
+          {biggestMovers.map((i,idx)=>(
+            <div key={i.id} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"11px 16px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+              <span style={{fontSize:13,fontWeight:500}}>{i.brand||i.name}</span>
+              <span style={{fontSize:12.5,color:"var(--mut)"}}>{money(r2(i.startCpw))} &rarr; <b style={{color:"var(--ink)"}}>{money(r2(i.cpw))}</b></span>
+            </div>
+          ))}
+        </div>}
+
+      <SectionRule right="most unearned cost">Biggest opportunities</SectionRule>
+      <div style={{border:"1px solid var(--line)",marginBottom:12}}>
+        {biggestOpportunity.length===0 && <div style={{padding:14,fontSize:12.5,color:"var(--faint)"}}>Everything reachable is already at goal.</div>}
+        {biggestOpportunity.map((i,idx)=>(
+          <div key={i.id} style={{padding:"12px 16px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline"}}>
+              <span style={{fontSize:13.5,fontWeight:500}}>{i.brand||i.name}</span>
+              <span style={{fontSize:12.5,color:"var(--mut)"}}>{money(r2(i.unearned))} unearned</span>
+            </div>
+            <div style={{height:4,background:"var(--lineSoft)",marginTop:8,position:"relative"}}>
+              <div style={{position:"absolute",inset:0,width:`${Math.round(i.progress*100)}%`,background:"var(--ink)"}}/>
+            </div>
+            <div style={{fontSize:11.5,color:"var(--faint)",marginTop:5}}>
+              {i.toGoal} more wear{i.toGoal===1?"":"s"} to reach {money(r2(i.goalCpw))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {projection && projection.freed>0 &&
+        <div style={{border:"1px solid var(--line)",padding:"16px 18px",marginBottom:34,background:"var(--soft)"}}>
+          <div className="lbl">If you wore each of those once a week</div>
+          <div style={{fontSize:13.5,marginTop:6,lineHeight:1.6}}>
+            In about three months you&rsquo;d earn off another <b>{money(r2(projection.freed))}</b>, taking those five from {money(r2(projection.now))} unearned down to {money(r2(projection.after))}.
+          </div>
+        </div>}
+
+      <SectionRule right="earned off vs still owed">Category breakdown</SectionRule>
+      <div style={{border:"1px solid var(--line)",marginBottom:34}}>
         {catStats.map((c,idx)=>(
           <div key={c.cat} style={{padding:"12px 16px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
@@ -563,11 +981,11 @@ function Insights({items}){
               <span style={{fontSize:12,color:"var(--faint)"}}>{c.count} piece{c.count===1?"":"s"}</span>
             </div>
             <div style={{height:5,background:"var(--lineSoft)",marginTop:8,position:"relative"}}>
-              <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${(c.spend/maxSpend)*100}%`,background:"var(--ink)"}}/>
+              <div style={{position:"absolute",inset:0,width:`${c.earnedPct}%`,background:"var(--ink)"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:6,flexWrap:"wrap",gap:6}}>
-              <span style={{fontSize:11.5,color:"var(--mut)"}}>{money(c.spend)} invested</span>
-              <span style={{fontSize:11.5,color:c.ratio&&c.ratio>1.5?"var(--flag)":"var(--mut)"}}>
+              <span style={{fontSize:11.5,color:"var(--mut)"}}>{c.earnedPct}% earned off &middot; {money(c.spend)} in</span>
+              <span style={{fontSize:11.5,color:c.avg&&c.avg>c.mid*1.5?"var(--flag)":"var(--mut)"}}>
                 {c.avg?`${money(r2(c.avg))} avg CPW`:"not yet worn"} &middot; target {c.range}
               </span>
             </div>
@@ -576,30 +994,27 @@ function Insights({items}){
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:24}}>
-        <RankList title="Most worn" items={mostWorn} render={i=>`${i.wears} wear${i.wears===1?"":"s"}`}/>
-        <RankList title="Longest dormant" items={longestDormant} render={i=>lastWornLabel(i)}/>
-        <RankList title="Highest cost per wear" items={highestCpw} render={i=>money(r2(i.cpw))}/>
+        <RankList title="Closest to goal" items={closestToGoal} render={i=>`${i.toGoal} to go`}
+          empty="Log a few wears and your near-misses show up here."/>
+        <RankList title="Best value" items={bestValue} render={i=>money(r2(i.cpw))}
+          empty="Nothing worn yet."/>
+        <RankList title="Longest dormant" items={longestDormant} render={i=>lastWornLabel(i)}
+          empty="Dormancy needs dated wears. It fills in as you log."/>
       </div>
 
-      {potentialRecovery>0 && <div style={{border:"1px solid var(--line)",padding:"16px 18px",marginTop:30}}>
-        <div className="lbl">Potential resale recovery</div>
-        <div style={{fontFamily:display,fontSize:28,marginTop:4}}>{money(potentialRecovery)}</div>
-        <div style={{fontSize:12,color:"var(--faint)",marginTop:4}}>from flagged pieces with a resale estimate on file</div>
-      </div>}
-
-      {neverWorn.length>0 && <div style={{marginTop:30}}>
+      {neverWorn.length>0 && <div style={{marginTop:34}}>
         <SectionRule right={`${neverWorn.length} pieces`}>Never worn</SectionRule>
         <div style={{fontSize:13,color:"var(--mut)",lineHeight:1.9}}>{neverWorn.map(i=>i.brand||i.name).join(" · ")}</div>
       </div>}
     </div>
   );
 }
-function RankList({title,items,render}){
+function RankList({title,items,render,empty}){
   return (
     <div>
       <div className="lbl" style={{marginBottom:10}}>{title}</div>
       <div style={{border:"1px solid var(--line)"}}>
-        {items.length===0 && <div style={{padding:12,fontSize:12,color:"var(--faint)"}}>Not enough data yet.</div>}
+        {items.length===0 && <div style={{padding:12,fontSize:12,color:"var(--faint)",lineHeight:1.5}}>{empty||"Not enough data yet."}</div>}
         {items.map((i,idx)=>(
           <div key={i.id} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"10px 12px",borderTop:idx?"1px solid var(--lineSoft)":"none"}}>
             <span style={{fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.brand||i.name}</span>
@@ -614,14 +1029,10 @@ function RankList({title,items,render}){
 /* ---------------- lookbook ---------------- */
 function Lookbook({outfits,addOutfit,delOutfit}){
   const ref=useRef();
-  const [open,setOpen]=useState(null); // id of expanded photo
+  const [open,setOpen]=useState(null);
   const openIdx=outfits.findIndex(o=>o.id===open);
   const openPhoto=openIdx>=0?outfits[openIdx]:null;
-  function step(delta){
-    if(openIdx<0) return;
-    const next=outfits[openIdx+delta];
-    if(next) setOpen(next.id);
-  }
+  function step(delta){ if(openIdx<0) return; const next=outfits[openIdx+delta]; if(next) setOpen(next.id); }
   return (
     <div>
       <Lead>Outfits you want to remember. Tap a photo to view it larger. Photos stay on this device.</Lead>
@@ -655,16 +1066,109 @@ function Lookbook({outfits,addOutfit,delOutfit}){
   );
 }
 
+/* ---------------- crop tool ---------------- */
+function CropModal({source,aspect=1,onDone,onCancel}){
+  const [ready,setReady]=useState(false);
+  const [zoom,setZoom]=useState(1);
+  const [pan,setPan]=useState({x:0,y:0});
+  const imgRef=useRef(null);
+  const boxRef=useRef(null);
+  const dragRef=useRef(null);
+  const S=260; // css px, square preview
+  const H=Math.round(S/aspect);
+
+  useEffect(()=>{
+    let cancelled=false, revoke=null;
+    const isFile = source instanceof File;
+    const loader = isFile
+      ? fileToImageEl(source)
+      : new Promise((res,rej)=>{
+          const img=new Image();
+          img.onload=()=>res({img,revoke:()=>{}});
+          img.onerror=()=>rej(new Error("Could not read that image"));
+          img.src=source;
+        });
+    loader.then(({img,revoke:r})=>{
+      if(cancelled){ if(r) r(); return; }
+      revoke=r; imgRef.current=img; setReady(true); setZoom(1); setPan({x:0,y:0});
+    }).catch(()=>onCancel());
+    return ()=>{ cancelled=true; if(revoke) revoke(); };
+  },[source]);
+
+  function baseScale(){
+    const img=imgRef.current; if(!img) return 1;
+    return Math.max(S/img.width, H/img.height);
+  }
+  function clampPan(p,z){
+    const img=imgRef.current; if(!img) return p;
+    const s=baseScale()*z;
+    const w=img.width*s, h=img.height*s;
+    const minX=Math.min(0,S-w), maxX=0;
+    const minY=Math.min(0,H-h), maxY=0;
+    return { x:Math.min(maxX,Math.max(minX,p.x)), y:Math.min(maxY,Math.max(minY,p.y)) };
+  }
+  function onPointerDown(e){
+    dragRef.current={startX:e.clientX,startY:e.clientY,panX:pan.x,panY:pan.y};
+    e.target.setPointerCapture&&e.target.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e){
+    if(!dragRef.current) return;
+    const dx=e.clientX-dragRef.current.startX, dy=e.clientY-dragRef.current.startY;
+    setPan(clampPan({x:dragRef.current.panX+dx,y:dragRef.current.panY+dy},zoom));
+  }
+  function onPointerUp(){ dragRef.current=null; }
+  function onZoom(z){ setZoom(z); setPan(p=>clampPan(p,z)); }
+
+  function confirm(){
+    const img=imgRef.current; if(!img) return;
+    const s=baseScale()*zoom;
+    const outW=700, outH=Math.round(outW/aspect);
+    const cv=document.createElement("canvas"); cv.width=outW; cv.height=outH;
+    const ctx=cv.getContext("2d");
+    const srcX=(0-pan.x)/s, srcY=(0-pan.y)/s, srcW=S/s, srcH=H/s;
+    ctx.drawImage(img,srcX,srcY,srcW,srcH,0,0,outW,outH);
+    try{ onDone(cv.toDataURL("image/jpeg",0.88)); }catch(e){ onCancel(); }
+  }
+
+  const img=imgRef.current;
+  const s=ready?baseScale()*zoom:1;
+  const dispW=img?img.width*s:S, dispH=img?img.height*s:H;
+
+  return (
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.55)",zIndex:90,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",border:"1px solid var(--line)",padding:22,width:"100%",maxWidth:340}}>
+        <div style={{fontFamily:display,fontSize:20,marginBottom:14}}>Position photo</div>
+        <div ref={boxRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}
+          style={{width:S,height:H,overflow:"hidden",position:"relative",background:"var(--soft)",margin:"0 auto",cursor:ready?"grab":"default",touchAction:"none"}}>
+          {ready && img && (
+            <img src={img.src} draggable={false} alt=""
+              style={{position:"absolute",left:pan.x,top:pan.y,width:dispW,height:dispH,userSelect:"none",pointerEvents:"none"}}/>
+          )}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:14}}>
+          <span className="lbl">Zoom</span>
+          <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={e=>onZoom(+e.target.value)} style={{flex:1}}/>
+        </div>
+        <div style={{fontSize:11.5,color:"var(--faint)",marginTop:8,lineHeight:1.5}}>Drag the photo to reposition it, then use the slider to zoom.</div>
+        <div style={{display:"flex",gap:10,marginTop:18}}>
+          <button onClick={confirm} disabled={!ready} style={{...solid,flex:1,opacity:ready?1:.5}}>Use this crop</button>
+          <button onClick={onCancel} style={ghost}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- add / edit ---------------- */
 function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
   const isNew=value.id==null;
-  const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",season:"All year",baseWears:0,...value});
+  const [v,setV]=useState({brand:"",name:"",category:"Tops",price:"",care:"",cleanCost:"",resale:"",goalCpw:"",season:"All year",baseWears:0,...value});
   const [imgLocal,setImgLocal]=useState(src||"");
+  const [cropFile,setCropFile]=useState(null);
   const [err,setErr]=useState("");
   const fileRef=useRef();
   const set=(k,val)=>setV(s=>({...s,[k]:val}));
   const wearsShown=(+v.baseWears||0)+((value.history||[]).length);
-  async function pick(f){ setErr(""); try{ setImgLocal(await fileToThumb(f,700,.85)); }catch(e){ setErr("Could not read that photo. Try a different file."); } }
   return (
     <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(17,17,17,.35)",zIndex:50,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"5vh 16px"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",width:"100%",maxWidth:520,padding:26,border:"1px solid var(--line)"}}>
@@ -676,8 +1180,9 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
         <div style={{display:"flex",gap:14,marginTop:20}}>
           <div style={{width:96,flex:"0 0 auto"}}>
             <Thumb src={imgLocal} label="+"/>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])pick(e.target.files[0]);e.target.value="";}}/>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setErr("");setCropFile(e.target.files[0]);}e.target.value="";}}/>
             <button onClick={()=>fileRef.current.click()} style={{...mini,width:"100%",marginTop:7}}>Photo</button>
+            {imgLocal && <button onClick={()=>setCropFile("__recrop__")} style={{...mini,width:"100%",marginTop:6}}>Reposition</button>}
             {imgLocal && <button onClick={()=>setImgLocal("")} style={{...mini,width:"100%",marginTop:6,color:"var(--flag)"}}>Clear</button>}
           </div>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:10}}>
@@ -698,6 +1203,9 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
           <Field label="Care spent so far"><input type="number" value={v.care} onChange={e=>set("care",e.target.value)} style={inp}/></Field>
           <Field label="Cost per cleaning"><input type="number" value={v.cleanCost} onChange={e=>set("cleanCost",e.target.value)} style={inp}/></Field>
           <Field label="Resale estimate"><input type="number" value={v.resale} onChange={e=>set("resale",e.target.value)} style={inp}/></Field>
+          <Field label={`Goal CPW (default ${money(BENCH[v.category]?BENCH[v.category].mid:5)})`}>
+            <input type="number" value={v.goalCpw} onChange={e=>set("goalCpw",e.target.value)} placeholder={String(BENCH[v.category]?BENCH[v.category].mid:5)} style={inp}/>
+          </Field>
           <Field label="Wears before tracking"><input type="number" value={v.baseWears} onChange={e=>set("baseWears",e.target.value)} style={inp}/></Field>
           <Field label="Total wears"><div style={{...inp,background:"var(--soft)",color:"var(--mut)"}}>{wearsShown}</div></Field>
         </div>
@@ -708,11 +1216,21 @@ function ItemForm({value,src,onSave,onCancel,onDelete,logClean}){
           </button>}
 
         <div style={{display:"flex",gap:10,marginTop:22,flexWrap:"wrap"}}>
-          <button onClick={()=>onSave({...v,img:imgLocal,price:+v.price||0,care:+v.care||0,cleanCost:+v.cleanCost||0,resale:+v.resale||0,baseWears:+v.baseWears||0})} style={{...solid,flex:1}}>
+          <button onClick={()=>onSave({...v,img:imgLocal,price:+v.price||0,care:+v.care||0,cleanCost:+v.cleanCost||0,resale:+v.resale||0,goalCpw:+v.goalCpw||0,baseWears:+v.baseWears||0})} style={{...solid,flex:1}}>
             {isNew?"Add to closet":"Save changes"}</button>
           {!isNew && <button onClick={()=>onDelete(v.id)} style={{...ghost,color:"var(--flag)",borderColor:"var(--flag)"}}>Remove</button>}
         </div>
       </div>
+
+      {cropFile && (
+        <div onClick={e=>e.stopPropagation()}>
+          <CropModal
+            source={cropFile==="__recrop__"?imgLocal:cropFile}
+            onCancel={()=>setCropFile(null)}
+            onDone={(dataUrl)=>{ setImgLocal(dataUrl); setCropFile(null); }}
+          />
+        </div>
+      )}
     </div>
   );
 }
