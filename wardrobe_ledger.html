@@ -90,6 +90,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     storageKey: "menas-closet-auth",
   },
 });
+const BUILD = "v7 · calendar";
 const PHOTO_BUCKET = "photos";
 /* the single account this personal app signs into automatically */
 const OWNER_EMAIL = "closet@menascloset.app";
@@ -603,7 +604,7 @@ function App(){
       atGoal:items.filter(i=>i.atGoal).length};
   },[items]);
 
-  if(session===undefined) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
+  if(session===undefined) return <LoadingScreen label="Connecting…" onRetry={()=>location.reload()}/>;
   if(!session) return (
     <div style={{padding:"60px 24px",textAlign:"center",maxWidth:420,margin:"0 auto"}}>
       <div style={{fontFamily:display,fontSize:26,letterSpacing:".18em"}}>MENA&rsquo;S CLOSET</div>
@@ -611,7 +612,7 @@ function App(){
       <button onClick={()=>location.reload()} style={{...solid,marginTop:20}}>Try again</button>
     </div>
   );
-  if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Loading your closet…</div>;
+  if(!raw) return <LoadingScreen onRetry={()=>loadAll(userId)}/>;
 
   const TABS=[["closet","Closet"],["calendar","Calendar"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["atgoal","At goal"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
 
@@ -637,7 +638,7 @@ function App(){
       <div style={{borderBottom:"1px solid var(--line)",textAlign:"center",padding:"26px 20px 0",position:"relative"}}>
         <div style={{fontFamily:display,fontSize:34,fontWeight:400,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
         <div className="lbl" style={{marginTop:9}}>
-          Cost per wear &middot; {stats.count} pieces {syncing && <span style={{marginLeft:6}}>&middot; syncing…</span>}
+          Cost per wear &middot; {stats.count} pieces &middot; {BUILD}{syncing && <span style={{marginLeft:6}}>&middot; syncing…</span>}
         </div>
         <div style={{display:"flex",justifyContent:"center",gap:0,flexWrap:"wrap",marginTop:20}}>
           {TABS.map(([k,l])=>(
@@ -685,6 +686,27 @@ function App(){
       {editing && <ItemForm value={editing} src={editing.id!=null?itemImgs[editing.id]:null} onSave={saveItem} onCancel={()=>setEditing(null)} onDelete={deleteItem} logClean={logClean}/>}
       {expanded && <PhotoLightbox photo={expanded} onClose={()=>setExpanded(null)}/>}
       {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,letterSpacing:".04em",padding:"11px 20px",zIndex:60,maxWidth:"88vw",textAlign:"center"}}>{toast}</div>}
+    </div>
+  );
+}
+
+/* ---------------- loading ---------------- */
+function LoadingScreen({label,onRetry}){
+  const [slow,setSlow]=useState(false);
+  useEffect(()=>{ const t=setTimeout(()=>setSlow(true),6000); return ()=>clearTimeout(t); },[]);
+  return (
+    <div style={{padding:"70px 24px",textAlign:"center",maxWidth:420,margin:"0 auto"}}>
+      <div style={{fontFamily:display,fontSize:26,letterSpacing:".18em"}}>MENA&rsquo;S CLOSET</div>
+      <div style={{fontSize:13.5,color:"var(--mut)",marginTop:14}}>{label||"Loading your closet…"}</div>
+      {slow && (
+        <div style={{marginTop:22,borderTop:"1px solid var(--line)",paddingTop:20}}>
+          <div style={{fontSize:13,color:"var(--mut)",lineHeight:1.65}}>
+            This is taking longer than it should. Most often that means the page is running an older cached copy. Force-refresh, or close and reopen from your home screen.
+          </div>
+          <button onClick={onRetry} style={{...solid,marginTop:16}}>Try again</button>
+          <div className="lbl" style={{marginTop:16}}>Build {BUILD}</div>
+        </div>
+      )}
     </div>
   );
 }
