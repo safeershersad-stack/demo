@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --bg:#FFFFFF; --soft:#FAFAF9; --ink:#111111; --mut:#6E6E6E; --faint:#9B9B9B;
@@ -82,8 +82,18 @@ function uniqueId(base,taken){
 /* ---------------- Supabase: the source of truth across every device ---------------- */
 const SUPABASE_URL = "https://nwvjsvnlggglywdocmwo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SUJc3uz4i5V3ZbeNHkdvTA_wUqE9nKg";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,        // keep the session in localStorage
+    autoRefreshToken: true,      // silently renew it before it expires
+    detectSessionInUrl: false,
+    storageKey: "menas-closet-auth",
+  },
+});
 const PHOTO_BUCKET = "photos";
+/* the single account this personal app signs into automatically */
+const OWNER_EMAIL = "closet@menascloset.app";
+const OWNER_PASS  = "mc-9f4Ka2Rv7TqE-closet";
 
 /* legacy on-device stores — read once so an existing closet can be migrated up */
 const KEY="menas_closet_v3";
@@ -155,6 +165,10 @@ const money=n=>n==null?"—":"$"+Number(n).toLocaleString(undefined,{minimumFrac
 const r2=n=>Math.round(n*100)/100;
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const daysBetween=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+function prettyDate(iso){
+  const [y,m,d]=iso.split("-").map(Number);
+  return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+}
 function seasonNow(){const m=new Date().getMonth();return m<2||m===11?"Winter":m<5?"Spring":m<8?"Summer":"Fall";}
 function dormancy(it){ if(!it.history.length) return null; const last=it.history[it.history.length-1]; return daysBetween(last,todayISO()); }
 function lastWornLabel(it){
@@ -322,13 +336,32 @@ function App(){
   const [toast,setToast]=useState("");
   const [syncing,setSyncing]=useState(false);
   const [migrateOffer,setMigrateOffer]=useState(null); // {count} when a local closet is found
+  const [loadError,setLoadError]=useState("");
 
   function flash(m){ setToast(m); setTimeout(()=>setToast(""),2600); }
 
-  /* ---- auth ---- */
-  useEffect(()=>{
-    sb.auth.getSession().then(({data})=>setSession(data.session||null));
-    const {data:sub}=sb.auth.onAuthStateChange((_e,s)=>setSession(s));
+  /* ---- silent sign-in: personal use, no login screen ----
+     The app signs itself into one fixed account so your closet syncs across
+     devices without ever asking for a password. Because this page is public,
+     treat this closet as readable by anyone who finds the URL and reads source. */
+  useEffect(()=>{(async()=>{
+    try{
+      const {data}=await sb.auth.getSession();
+      if(data.session){ setSession(data.session); return; }
+      let res=await sb.auth.signInWithPassword({email:OWNER_EMAIL,password:OWNER_PASS});
+      if(res.error){
+        const up=await sb.auth.signUp({email:OWNER_EMAIL,password:OWNER_PASS});
+        if(up.error && !/already/i.test(up.error.message||"")) throw up.error;
+        res=await sb.auth.signInWithPassword({email:OWNER_EMAIL,password:OWNER_PASS});
+        if(res.error) throw res.error;
+      }
+      setSession(res.data.session);
+    }catch(e){
+      setSession(null);
+      setLoadError(e?.message||"Could not connect to your closet.");
+    }
+  })();
+    const {data:sub}=sb.auth.onAuthStateChange((_e,s)=>{ if(s) setSession(s); });
     return ()=>{ sub.subscription.unsubscribe(); };
   },[]);
 
@@ -336,19 +369,34 @@ function App(){
 
   /* ---- load everything for this account ---- */
   async function loadAll(uid){
-    setSyncing(true);
+    setSyncing(true); setLoadError("");
     try{
-      const {data:rows,error}=await sb.from("items").select("*").eq("user_id",uid);
+      // fail loudly rather than spinning forever if the network stalls
+      const withTimeout=(p,ms=15000)=>Promise.race([p,
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timed out reaching the database")),ms))]);
+
+      const {data:rows,error}=await withTimeout(sb.from("items").select("*").eq("user_id",uid));
       if(error) throw error;
       const list=(rows||[]).map(rowToItem);
-      setRaw(list);
-      const urls={};
-      await Promise.all(list.filter(i=>i.photoPath).map(async i=>{ urls[i.id]=await signedUrl(i.photoPath); }));
-      setItemImgs(urls);
+      setRaw(list);   // set this FIRST so the app is usable even if photos lag
 
-      const {data:ofs}=await sb.from("outfits").select("*").eq("user_id",uid).order("created_at",{ascending:false});
-      const withUrls=await Promise.all((ofs||[]).map(async o=>({id:o.id,path:o.photo_path,src:await signedUrl(o.photo_path)})));
-      setOutfits(withUrls);
+      // photos are best-effort: a storage hiccup must never block the closet
+      try{
+        const urls={};
+        await Promise.all(list.filter(i=>i.photoPath).map(async i=>{
+          try{ urls[i.id]=await signedUrl(i.photoPath); }catch(e){}
+        }));
+        setItemImgs(urls);
+      }catch(e){}
+
+      try{
+        const {data:ofs}=await withTimeout(sb.from("outfits").select("*").eq("user_id",uid).order("created_at",{ascending:false}));
+        const withUrls=await Promise.all((ofs||[]).map(async o=>{
+          let src=null; try{ src=await signedUrl(o.photo_path); }catch(e){}
+          return {id:o.id,path:o.photo_path,src};
+        }));
+        setOutfits(withUrls);
+      }catch(e){ setOutfits([]); }
 
       // first time on this account: is there a closet sitting in this browser to bring up?
       if(list.length===0){
@@ -362,7 +410,10 @@ function App(){
           }
         }
       }
-    }catch(e){ flash("Could not reach your closet. Check your connection."); }
+    }catch(e){
+      setRaw([]);   // never leave the app stuck on a spinner
+      setLoadError(e?.message||"Could not reach your closet.");
+    }
     setSyncing(false);
   }
   useEffect(()=>{ if(userId) loadAll(userId); },[userId]);
@@ -439,6 +490,24 @@ function App(){
       else flash(`${label} now ${money(r2(b.cpw))} per wear`);
     }
   }
+  /* log or unlog a wear on a specific date (calendar) */
+  function logWearOn(id,dateISO){
+    const before=raw.find(r=>r.id===id); if(!before) return;
+    const after={...before,history:[...before.history,dateISO].sort()};
+    setRaw(rs=>rs.map(r=>r.id===id?after:r));
+    persist(after);
+    const b=derive(after);
+    flash(`${before.brand||before.name} logged for ${prettyDate(dateISO)} · ${money(r2(b.cpw))} per wear`);
+  }
+  function removeWearOn(id,dateISO){
+    const before=raw.find(r=>r.id===id); if(!before) return;
+    const idx=before.history.indexOf(dateISO); if(idx<0) return;
+    const h=[...before.history]; h.splice(idx,1);
+    const after={...before,history:h};
+    setRaw(rs=>rs.map(r=>r.id===id?after:r));
+    persist(after);
+  }
+
   function logClean(id){
     const before=raw.find(r=>r.id===id); if(!before) return;
     const after={...before,care:(+before.care||0)+(+before.cleanCost||0)};
@@ -535,13 +604,27 @@ function App(){
   },[items]);
 
   if(session===undefined) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Opening the closet…</div>;
-  if(!session) return <AuthScreen flash={flash} toast={toast}/>;
+  if(!session) return (
+    <div style={{padding:"60px 24px",textAlign:"center",maxWidth:420,margin:"0 auto"}}>
+      <div style={{fontFamily:display,fontSize:26,letterSpacing:".18em"}}>MENA&rsquo;S CLOSET</div>
+      <div style={{fontSize:13.5,color:"var(--flag)",marginTop:16,lineHeight:1.6}}>{loadError||"Couldn't connect."}</div>
+      <button onClick={()=>location.reload()} style={{...solid,marginTop:20}}>Try again</button>
+    </div>
+  );
   if(!raw) return <div style={{padding:60,textAlign:"center",color:"var(--faint)"}}>Loading your closet…</div>;
 
-  const TABS=[["closet","Closet"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["atgoal","At goal"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
+  const TABS=[["closet","Closet"],["calendar","Calendar"],["today","Get dressed"],["underused","Underused"],["rotate","Rotate in"],["atgoal","At goal"],["sell","Sell or keep"],["insights","Insights"],["lookbook","Lookbook"]];
 
   return (
     <div>
+      {loadError && (
+        <div style={{background:"var(--flag)",color:"#fff",padding:"12px 20px",fontSize:12.5,lineHeight:1.6,textAlign:"center"}}>
+          Couldn&rsquo;t load your closet: {loadError}
+          <div style={{marginTop:8,display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+            <button onClick={()=>loadAll(userId)} style={{fontSize:11.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--flag)",background:"#fff",padding:"8px 14px"}}>Try again</button>
+          </div>
+        </div>
+      )}
       {migrateOffer && (
         <div style={{background:"var(--ink)",color:"#fff",padding:"14px 20px",fontSize:12.5,lineHeight:1.6,textAlign:"center"}}>
           Found {migrateOffer.count} pieces saved in this browser. Bring them into your account so they sync everywhere?
@@ -556,7 +639,6 @@ function App(){
         <div className="lbl" style={{marginTop:9}}>
           Cost per wear &middot; {stats.count} pieces {syncing && <span style={{marginLeft:6}}>&middot; syncing…</span>}
         </div>
-        <button onClick={()=>sb.auth.signOut()} style={{position:"absolute",right:18,top:22,fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--faint)"}}>Sign out</button>
         <div style={{display:"flex",justifyContent:"center",gap:0,flexWrap:"wrap",marginTop:20}}>
           {TABS.map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)} className="hoverlift" style={{
@@ -590,6 +672,7 @@ function App(){
         )}
 
         {tab==="closet" && <Closet items={items} itemImgs={itemImgs} onEdit={setEditing} onExpand={setExpanded} logWear={logWear} exportJSON={exportJSON} importJSON={importJSON}/>}
+        {tab==="calendar" && <CalendarTab items={items} itemImgs={itemImgs} logWearOn={logWearOn} removeWearOn={removeWearOn} onExpand={setExpanded}/>}
         {tab==="today" && <Today items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
         {tab==="underused" && <Underused items={items} itemImgs={itemImgs} logWear={logWear} onEdit={setEditing} onExpand={setExpanded}/>}
         {tab==="rotate" && <Rotate items={items} itemImgs={itemImgs} logWear={logWear} onExpand={setExpanded}/>}
@@ -606,64 +689,124 @@ function App(){
   );
 }
 
-/* ---------------- sign in ---------------- */
-function AuthScreen({flash,toast}){
-  const [mode,setMode]=useState("signin");
-  const [email,setEmail]=useState("");
-  const [pw,setPw]=useState("");
-  const [busy,setBusy]=useState(false);
-  const [err,setErr]=useState("");
+/* ---------------- calendar ---------------- */
+function CalendarTab({items,itemImgs,logWearOn,removeWearOn,onExpand}){
+  const now=new Date();
+  const [view,setView]=useState({y:now.getFullYear(),m:now.getMonth()});
+  const [selected,setSelected]=useState(todayISO());
+  const [picking,setPicking]=useState(false);
+  const [q,setQ]=useState("");
 
-  async function submit(){
-    setErr(""); setBusy(true);
-    try{
-      const fn = mode==="signin" ? sb.auth.signInWithPassword : sb.auth.signUp;
-      const {error}=await fn.call(sb.auth,{email:email.trim(),password:pw});
-      if(error) setErr(error.message);
-    }catch(e){ setErr("Something went wrong. Try again."); }
-    setBusy(false);
+  // date -> [{item, }] worn that day
+  const byDate=useMemo(()=>{
+    const map={};
+    items.forEach(i=>i.history.forEach(d=>{ (map[d]=map[d]||[]).push(i); }));
+    return map;
+  },[items]);
+
+  const first=new Date(view.y,view.m,1);
+  const daysInMonth=new Date(view.y,view.m+1,0).getDate();
+  const startDow=first.getDay();
+  const cells=[];
+  for(let i=0;i<startDow;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++){
+    const iso=`${view.y}-${String(view.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    cells.push({d,iso,worn:byDate[iso]||[]});
   }
+  function shift(n){
+    const dt=new Date(view.y,view.m+n,1);
+    setView({y:dt.getFullYear(),m:dt.getMonth()});
+  }
+  const monthLabel=first.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  const wornToday=byDate[selected]||[];
+  const monthTotal=cells.filter(Boolean).reduce((s,c)=>s+c.worn.length,0);
+
+  const pool=[...items]
+    .filter(i=>!q || `${i.brand} ${i.name}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((a,b)=>(b.dormant??1e9)-(a.dormant??1e9));
 
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"6vh 20px"}}>
-      <div style={{width:"100%",maxWidth:360,textAlign:"center"}}>
-        <div style={{fontFamily:display,fontSize:30,letterSpacing:".2em",textIndent:".2em",lineHeight:1}}>MENA&rsquo;S CLOSET</div>
-        <div className="lbl" style={{marginTop:10,marginBottom:28}}>
-          {mode==="signin"?"Sign in to your closet":"Create your account"}
+    <div>
+      <Lead>Log wears on any date, not just today. Tap a day to see what you wore and add pieces to it &mdash; useful for catching up after a trip or a week you forgot to track.</Lead>
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <button onClick={()=>shift(-1)} className="hoverlift" style={{fontSize:20,padding:"4px 12px"}}>&lsaquo;</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontFamily:display,fontSize:22}}>{monthLabel}</div>
+          <div className="lbl" style={{marginTop:3}}>{monthTotal} wear{monthTotal===1?"":"s"} logged</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10,textAlign:"left"}}>
-          <Field label="Email">
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" style={inp}/>
-          </Field>
-          <Field label="Password">
-            <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter")submit();}}
-              autoComplete={mode==="signin"?"current-password":"new-password"} style={inp}/>
-          </Field>
-        </div>
-        {err && <div style={{fontSize:12,color:"var(--flag)",marginTop:12,textAlign:"left",lineHeight:1.5}}>{err}</div>}
-        <button onClick={submit} disabled={busy||!email||!pw} style={{...solid,width:"100%",marginTop:18,opacity:(busy||!email||!pw)?.5:1}}>
-          {busy?"One moment…":(mode==="signin"?"Sign in":"Create account")}
-        </button>
-        <button onClick={()=>{setMode(mode==="signin"?"signup":"signin");setErr("");}}
-          style={{fontSize:12,color:"var(--mut)",marginTop:16}}>
-          {mode==="signin"?"No account yet? Create one":"Already have an account? Sign in"}
-        </button>
-        <div style={{fontSize:11.5,color:"var(--faint)",marginTop:26,lineHeight:1.6}}>
-          Your closet syncs to every device you sign in on.
+        <button onClick={()=>shift(1)} className="hoverlift" style={{fontSize:20,padding:"4px 12px"}}>&rsaquo;</button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,background:"var(--line)",border:"1px solid var(--line)"}}>
+        {["S","M","T","W","T","F","S"].map((d,i)=>(
+          <div key={i} style={{background:"var(--soft)",textAlign:"center",padding:"7px 0",fontSize:10,letterSpacing:".1em",color:"var(--faint)"}}>{d}</div>
+        ))}
+        {cells.map((c,idx)=>{
+          if(!c) return <div key={"e"+idx} style={{background:"var(--bg)",minHeight:62}}/>;
+          const isToday=c.iso===todayISO();
+          const isSel=c.iso===selected;
+          return (
+            <button key={c.iso} onClick={()=>setSelected(c.iso)} style={{
+              background:isSel?"var(--ink)":"var(--bg)", color:isSel?"#fff":"var(--ink)",
+              minHeight:62, padding:"6px 4px", textAlign:"left", position:"relative",
+              border:"none", display:"flex", flexDirection:"column", alignItems:"flex-start", gap:4}}>
+              <span style={{fontSize:12,fontWeight:isToday?600:400,
+                textDecoration:isToday?"underline":"none",opacity:isSel?1:.8}}>{c.d}</span>
+              {c.worn.length>0 && (
+                <span style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                  {c.worn.slice(0,4).map((w,i)=>(
+                    <span key={i} style={{width:5,height:5,borderRadius:99,background:isSel?"#fff":"var(--win)"}}/>
+                  ))}
+                  {c.worn.length>4 && <span style={{fontSize:9,opacity:.7}}>+{c.worn.length-4}</span>}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{marginTop:28}}>
+        <SectionRule right={`${wornToday.length} piece${wornToday.length===1?"":"s"}`}>
+          {prettyDate(selected)}{selected===todayISO()?" · today":""}
+        </SectionRule>
+
+        {wornToday.length===0
+          ? <Empty>Nothing logged for this day yet.</Empty>
+          : <RowList>
+              {wornToday.map((i,n)=>(
+                <ItemRow key={i.id+"-"+n} i={i} src={itemImgs[i.id]} onExpand={onExpand} showGoal={false}
+                  trailing={<button onClick={()=>removeWearOn(i.id,selected)} style={{...mini,color:"var(--flag)"}}>Remove</button>}/>
+              ))}
+            </RowList>}
+
+        <div style={{marginTop:16}}>
+          {!picking
+            ? <button onClick={()=>setPicking(true)} style={solid}>+ Add a piece to this day</button>
+            : <div style={{border:"1px solid var(--line)",padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+                  <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search your closet" style={{...inp,flex:1}}/>
+                  <button onClick={()=>{setPicking(false);setQ("");}} style={mini}>Done</button>
+                </div>
+                <div style={{maxHeight:300,overflowY:"auto",border:"1px solid var(--lineSoft)"}}>
+                  {pool.map((i,idx)=>(
+                    <button key={i.id} onClick={()=>logWearOn(i.id,selected)} style={{
+                      width:"100%",textAlign:"left",display:"flex",gap:10,alignItems:"center",
+                      padding:"9px 11px",borderTop:idx?"1px solid var(--lineSoft)":"none",background:"transparent"}}>
+                      <span style={{width:30,flex:"0 0 auto"}}><Thumb src={itemImgs[i.id]} label={(i.brand||i.name).slice(0,1)}/></span>
+                      <span style={{flex:1,minWidth:0}}>
+                        <span style={{display:"block",fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>{i.brand||i.category}</span>
+                        <span style={{display:"block",fontSize:12.5,color:"var(--mut)"}}>{i.name}</span>
+                      </span>
+                      <span style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap"}}>{lastWornLabel(i)}</span>
+                    </button>
+                  ))}
+                  {pool.length===0 && <div style={{padding:12,fontSize:12.5,color:"var(--faint)"}}>Nothing matches.</div>}
+                </div>
+              </div>}
         </div>
       </div>
-      {toast && <div style={{position:"fixed",left:"50%",bottom:26,transform:"translateX(-50%)",background:"var(--ink)",color:"#fff",fontSize:12.5,padding:"11px 20px"}}>{toast}</div>}
     </div>
-  );
-}
-function ImportButton({onImport,label,light}){
-  const ref=useRef();
-  return (
-    <>
-      <input ref={ref} type="file" accept="application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])onImport(e.target.files[0]);e.target.value="";}}/>
-      <button onClick={()=>ref.current.click()} style={light?{fontSize:11.5,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink)",background:"#fff",padding:"8px 14px"}:ghost}>{label}</button>
-    </>
   );
 }
 
